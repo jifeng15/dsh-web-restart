@@ -78,21 +78,23 @@ dsh-web status     # check status anytime
 
 | ✅ **Can** | ❌ **Can't** |
 |---|---|
-| **Auto-restart** dsh web after installing plugins — **no manual commands** (conversation) | Agent **continuing seamlessly** after restart — restart briefly disconnects, you refresh (structural limit) |
-| `restart`/`reload` take effect after editing profile config (`cordis.patch.yml`) | Load plugins/config **without restarting the process** (bundle tree is composed at startup; must restart the process — refreshing the page only reconnects, it doesn't load) |
-| `upgrade` upgrades dsh and auto-restarts | Auto-recover after reboot (you re-run `dsh-web start` once) |
-| No tmux? **Auto-installs it** (macOS/Linux package managers) | Auto-restart on **crash** (currently handles normal restarts only) |
+| **Hot install/uninstall** plugins via bundled dsh-web-hot — **no restart** (falls back to safe restart if unavailable) | Agent **continuing seamlessly** after restart — restart briefly disconnects, you refresh (structural limit) |
+| **Auto-restart** dsh web after plugin changes, config edits, or dsh upgrade — **no manual commands** (conversation) | Hot-apply **module code updates** (Node require cache — must restart) |
+| `reload` takes effect after editing profile config (`cordis.patch.yml`) | Auto-recover after reboot (you re-run `dsh-web start` once) |
+| No tmux? **Auto-installs it** (macOS/Linux package managers) | Auto-upgrade non-npm/pnpm dsh installs (only hints) |
 | dsh web running in a plain terminal? **Auto-migrates into tmux** | Skill additions, AGENTS.md edits, etc. (these **already hot-reload**; not needed here) |
-| Session not named `dsh-web`? **Auto-discovers** the hosting session | Auto-upgrade non-npm/pnpm dsh installs (only hints) |
+| Session not named `dsh-web`? **Auto-discovers** the hosting session | Crash auto-restart is a separate opt-in (run-loop) |
 | Port not 3080? **Auto-discovers** (incl. `--port 0` random ports) | — |
 | All terminals closed — dsh web **keeps running**, restartable anytime | — |
 
-**In one line**: for DSH changes that require a restart (install plugins, edit profile config, upgrade dsh), it safely auto-restarts and keeps dsh web resident; you just refresh after the brief disconnect.
+**In one line**: install/uninstall plugins **without restarting** (hot), and for everything that genuinely must restart (config edits, dsh upgrade, migration), it restarts safely and keeps dsh web resident — you just refresh after the brief disconnect.
 
 ## Commands
 
 ```bash
-dsh-web restart    # ★ Core: unified command after installing/removing/updating plugins, editing profile config, or upgrading dsh
+dsh-web install <spec>   # ★ Install plugin: hot install (no restart) if available, else safe restart
+dsh-web remove <pkg>     # ★ Remove plugin: hot uninstall if available, else safe restart
+dsh-web restart    # ★ Fallback/other: unified safe restart after plugin changes, config edits, or dsh upgrade
 dsh-web start      # Start / auto-takeover (create session if none, migrate into tmux if unmanaged)
 dsh-web stop       # Stop
 dsh-web status     # Check session/port/PID/logs
@@ -102,7 +104,11 @@ dsh-web autostart-off   # Disable autostart
 dsh-web autostart-status # Check autostart status
 ```
 
-> **Users only need to remember `dsh-web restart`** — it covers all three scenarios: install/remove/update plugins, edit profile config, upgrade dsh (the agent auto-upgrades then restarts for the upgrade case). `reload`/`upgrade` are semantic aliases for agent-internal use; regular users don't need to distinguish them.
+> **Hot install first, safe restart as fallback**: `dsh-web install/remove` try the
+> bundled hot-plugin (dsh-web-hot) first — installing/uninstalling plugins **without
+> a restart**. If hot apply is unavailable (plugin not loaded, or the change can't be
+> hot-applied), it falls back to a safe restart automatically. `dsh-web restart` remains
+> the unified command for everything else (config edits, dsh upgrade, migration).
 
 > **Autostart is optional and OFF by default** — the skill never enables autostart on its own. Run `dsh-web autostart-on` when you want dsh web to start in tmux after login.
 

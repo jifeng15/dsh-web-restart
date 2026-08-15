@@ -19,10 +19,42 @@ install_skill() {
   cp "${SRC_DIR}/SKILL.md" "${DEST_DIR}/SKILL.md"
   cp "${SRC_DIR}/scripts/dsh-web.sh" "${DEST_DIR}/scripts/dsh-web.sh"
   cp "${SRC_DIR}/scripts/install-tmux.sh" "${DEST_DIR}/scripts/install-tmux.sh"
+  # hot-plugin 一并复制，供 dsh-web-hot 本地安装使用
+  mkdir -p "${DEST_DIR}/hot-plugin"
+  cp "${SRC_DIR}/hot-plugin/package.json" "${DEST_DIR}/hot-plugin/package.json"
+  cp "${SRC_DIR}/hot-plugin/cordis.patch.yml" "${DEST_DIR}/hot-plugin/cordis.patch.yml"
+  cp "${SRC_DIR}/hot-plugin/index.js" "${DEST_DIR}/hot-plugin/index.js"
+  cp "${SRC_DIR}/hot-plugin/manager.js" "${DEST_DIR}/hot-plugin/manager.js"
   chmod +x "${DEST_DIR}/scripts/dsh-web.sh" "${DEST_DIR}/scripts/install-tmux.sh"
   echo "==> Skill 已安装到 ${DEST_DIR}"
   echo "    下次会话 agent 会自动加载；也可手动执行:"
   echo "    bash ${DEST_DIR}/scripts/dsh-web.sh status"
+}
+
+install_hot_plugin() {
+  # 把 dsh-web-hot 装进 web profile（本地 bundle），提供免重启热装能力。
+  # 需要 dsh CLI + pnpm；失败不影响 skill 本身（热装降级为安全重启）。
+  if ! command -v dsh >/dev/null 2>&1; then
+    echo "!! 未找到 dsh 命令，跳过热装插件安装（dsh-web install 将降级为安全重启）"
+    return 0
+  fi
+  local profile="$HOME/.dsh/profiles/web"
+  if [ ! -f "${profile}/package.json" ]; then
+    echo "!! 未找到 web profile，跳过热装插件安装"
+    return 0
+  fi
+  echo "==> 安装热装插件 dsh-web-hot 到 web profile..."
+  if command -v pnpm >/dev/null 2>&1 || [ -x /opt/homebrew/bin/pnpm ]; then
+    local path_pnpm
+    if ! command -v pnpm >/dev/null 2>&1; then
+      export PATH="/opt/homebrew/bin:${PATH}"
+    fi
+    dsh plugin --profile web add "link:${DEST_DIR}/hot-plugin" 2>&1 | tail -3
+    echo "==> dsh-web-hot 已加入 bundle；重启 dsh web 后热装能力生效"
+    echo "    可用: dsh-web restart  （重启后 dsh-web install/remove 自动走热装）"
+  else
+    echo "!! 未找到 pnpm，跳过热装插件安装（dsh-web install 将降级为安全重启）"
+  fi
 }
 
 install_bin() {
@@ -52,6 +84,9 @@ case "${1:-}" in
     install_bin
     if [ "${1:-}" != "--no-tmux" ]; then
       ensure_tmux || true
+    fi
+    if [ "${1:-}" != "--no-hot" ]; then
+      install_hot_plugin
     fi
     ;;
 esac

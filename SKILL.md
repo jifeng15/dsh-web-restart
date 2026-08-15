@@ -91,7 +91,22 @@ bash <skill_dir>/scripts/dsh-web.sh restart   # 重启/自动接管（agent 装�
 「托管了 dsh web」的任意会话（判定：端口有监听 + 某 pane 前台是 node），
 然后对该会话执行操作。所以对方用 `0`、`mysession` 等任意名字托管也能工作。
 
-### 装完插件后自动重启（agent 推荐调用）
+### 装完插件后：优先热装（免重启），失败才重启
+
+**装/卸插件优先用 `install`/`remove`（热装免重启）**：
+
+```bash
+bash <skill_dir>/scripts/dsh-web.sh install <spec>   # 热装，免重启
+bash <skill_dir>/scripts/dsh-web.sh remove <pkg>     # 热卸，免重启
+```
+
+- 若 dsh-web-hot 插件已加载（`install.sh` 会自动装），走**免重启热装**——pnpm add
+  + 写 patch 层 + include.update 热应用，用户无感。
+- 若热装不可用（插件未加载 / 变更无法热应用），**自动回退安全重启**。
+- **模块代码级更新**（改插件源码后重装）无法热应用（Node require 缓存），
+  必然回退重启——这是结构性限制，不是 bug。
+
+**其他场景（改配置 / 升级本体 / 迁移）才用 `restart`**：
 
 ```bash
 bash <skill_dir>/scripts/dsh-web.sh restart
@@ -100,8 +115,8 @@ bash <skill_dir>/scripts/dsh-web.sh restart
 脚本会用 tmux run-shell 排定延迟重启，然后**告诉用户「5-8 秒后刷新页面」**。
 不需要用户手动跑任何终端命令。
 
-> **对用户统一说 `restart`**：不管装插件、改配置还是升级本体，向用户呈现的都是
-> "安全重启"这一个动作。`reload`/`upgrade` 只是 agent 内部的语义化别名——当
+> **对用户统一说 `install`/`remove`（装插件）和 `restart`（其余）**：装/卸插件时
+> 优先给用户"免重启"体验；`reload`/`upgrade` 只是 agent 内部的语义化别名——当
 > 场景明确（改配置 → reload；升级 → upgrade）时用它更精准，但不要把这些
 > 差异抛给用户去记。
 

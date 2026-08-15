@@ -324,6 +324,63 @@ cmd_reload() {
   cmd_restart
 }
 
+# 检查 dsh-web-hot 热装路由是否可用（进程内插件已加载）
+hot_available() {
+  is_listening || return 1
+  curl -s -m 3 "http://127.0.0.1:${PORT}/dsh-web-hot/list" 2>/dev/null | grep -q '"ok":true'
+}
+
+# 热装/热卸（通过 dsh-web-hot 进程内插件，免重启）
+hot_install() { curl -s -m 300 -X POST "http://127.0.0.1:${PORT}/dsh-web-hot/install" -H "content-type: application/json" -d "{\"spec\":\"$1\"}" 2>/dev/null; }
+hot_uninstall() { curl -s -m 300 -X POST "http://127.0.0.1:${PORT}/dsh-web-hot/uninstall" -H "content-type: application/json" -d "{\"packageName\":\"$1\"}" 2>/dev/null; }
+
+# 安装插件：优先热装（免重启）；热装不可用或失败时回退安全重启。
+cmd_install() {
+  local spec="$1" result
+  [ -n "${spec}" ] || die "用法: dsh-web install <spec>（npm 包名 / git URL / github:owner/repo）"
+  if hot_available; then
+    log "检测到热装可用（dsh-web-hot），尝试免重启安装 ${spec}..."
+    result="$(hot_install "${spec}")"
+    if printf '%s' "${result}" | grep -q '"ok":true'; then
+      log "✅ 热装成功（免重启）: $(printf '%s' "${result}" | sed 's/.*"message":"\([^"]*\)".*/\1/')"
+      return 0
+    fi
+    log "热装未成功（$(printf '%s' "${result}" | sed 's/.*"message":"\([^"]*\)".*/\1/' | head -c 80)），回退安全重启安装..."
+  else
+    log "未检测到热装插件（dsh-web-hot），走安全重启安装..."
+  fi
+  # 回退：pnpm add + 安全重启
+  if ! command -v pnpm >/dev/null 2>&1 && [ -x /opt/homebrew/bin/pnpm ]; then
+    export PATH="/opt/homebrew/bin:${PATH}"
+  fi
+  ( cd ~/.dsh/profiles/web && pnpm add "${spec}" --config.minimumReleaseAge=0 --registry=https://registry.npmjs.org >/dev/null 2>&1 ) \
+    || die "pnpm add 失败: ${spec}"
+  cmd_restart
+}
+
+# 卸载插件：优先热卸；失败回退移除依赖 + 安全重启。
+cmd_remove() {
+  local pkg="$1" result
+  [ -n "${pkg}" ] || die "用法: dsh-web remove <packageName>"
+  if hot_available; then
+    log "检测到热卸可用（dsh-web-hot），尝试免重启卸载 ${pkg}..."
+    result="$(hot_uninstall "${pkg}")"
+    if printf '%s' "${result}" | grep -q '"ok":true'; then
+      log "✅ 热卸成功（免重启）: $(printf '%s' "${result}" | sed 's/.*"message":"\([^"]*\)".*/\1/')"
+      return 0
+    fi
+    log "热卸未成功（$(printf '%s' "${result}" | sed 's/.*"message":"\([^"]*\)".*/\1/' | head -c 80)），回退安全重启卸载..."
+  else
+    log "未检测到热装插件（dsh-web-hot），走安全重启卸载..."
+  fi
+  if ! command -v pnpm >/dev/null 2>&1 && [ -x /opt/homebrew/bin/pnpm ]; then
+    export PATH="/opt/homebrew/bin:${PATH}"
+  fi
+  ( cd ~/.dsh/profiles/web && pnpm remove "${pkg}" --config.minimumReleaseAge=0 >/dev/null 2>&1 ) \
+    || log "pnpm remove 失败（可能未安装 ${pkg}）"
+  cmd_restart
+}
+
 # 升级 dsh 本体（npm 全局包）后自动重启生效。
 # 支持：npm 全局安装（标准）；其他安装方式（pnpm/源码）给出提示，仅重启。
 cmd_upgrade() {
@@ -478,6 +535,8 @@ case "${1:-}" in
   restart) cmd_restart ;;
   reload)  cmd_reload ;;
   upgrade) cmd_upgrade ;;
+  install) cmd_install "${2:-}" ;;
+  remove)  cmd_remove "${2:-}" ;;
   report-port) report_port ;;
   autostart-on) autostart_on ;;
   autostart-off) autostart_off ;;
@@ -485,5 +544,5 @@ case "${1:-}" in
   stop)    cmd_stop ;;
   status)  cmd_status ;;
   attach)  cmd_attach ;;
-  *) die "用法: dsh-web.sh {start|restart|reload|upgrade|stop|status|attach}" ;;
+  *) die "用法: dsh-web.sh {start|restart|install|remove|reload|upgrade|stop|status|attach}" ;;
 esac

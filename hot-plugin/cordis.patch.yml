@@ -1,0 +1,4 @@
+# dsh-web-hot bundle patch: mount the hot-plugin lifecycle gateway.
+- insert:
+    - id: dsh-web-hot
+      name: dsh-web-hot
