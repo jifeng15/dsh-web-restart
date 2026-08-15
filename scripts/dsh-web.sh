@@ -294,7 +294,7 @@ cmd_restart() {
   # 关键：由 tmux server 独立执行延迟重启。
   # - 调用方（agent 会话 / 终端）即使被杀，tmux server 仍会完成 C-c 与重新启动。
   # - 不要在括号内用 $SESSION 外层展开出问题：tmux run-shell 以 server 环境执行。
-  log "由 tmux server 排定自动重启（约 5-8 秒完成，页面会短暂断开）"
+  log "由 tmux server 排定自动重启（会话 ${SESSION}，约 5-8 秒完成，页面会短暂断开）"
   tmux run-shell -b "sleep 3; tmux send-keys -t ${SESSION} C-c; sleep 2; tmux send-keys -t ${SESSION} '$(crash_loop_cmd)' Enter; echo \"dsh-web restarted \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
   # 延迟探测重启后的实际端口（等 6 秒新进程接管），写入 last-port.txt 并通知
   ( sleep 6; "${BASH_SOURCE[0]}" report-port ) >/dev/null 2>&1 &
@@ -442,6 +442,17 @@ cmd_status() {
   ls -la "${LOG_DIR}"/dsh-web.log "${LOG_DIR}"/auto-restart.log 2>/dev/null || echo "（暂无日志）"
 }
 
+# 报告当前实际解析到的 tmux 会话名——调试/手动操作前先跑它，
+# 避免假设会话名（如假设 dsh-web 而实际是 0）。
+cmd_session() {
+  resolve_session || true
+  if has_session; then
+    echo "${SESSION}"
+  else
+    echo "(无托管 dsh web 的 tmux 会话)"
+  fi
+}
+
 cmd_attach() {
   resolve_session || true   # 找不到 dsh-web 时自动发现托管会话
   has_session || die "无会话 ${SESSION}，请先 start"
@@ -543,6 +554,7 @@ case "${1:-}" in
   autostart-status) autostart_status ;;
   stop)    cmd_stop ;;
   status)  cmd_status ;;
+  session) cmd_session ;;
   attach)  cmd_attach ;;
-  *) die "用法: dsh-web.sh {start|restart|install|remove|reload|upgrade|stop|status|attach}" ;;
+  *) die "用法: dsh-web.sh {start|restart|install|remove|reload|upgrade|stop|status|session|attach}" ;;
 esac
