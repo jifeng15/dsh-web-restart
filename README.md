@@ -82,7 +82,16 @@ dsh-web upgrade    # 升级 dsh 本体并自动重启
 dsh-web stop       # 停止
 dsh-web status     # 查看会话/端口/PID/日志
 dsh-web attach     # 进入 tmux 排查
+dsh-web autostart-on    # 启用开机自启（默认关闭，用户主动选择；launchd/systemd）
+dsh-web autostart-off   # 关闭开机自启
+dsh-web autostart-status # 查看自启状态
 ```
+
+> **开机自启是可选功能，默认关闭**——skill 不会自动启用任何自启项。需要开机后 dsh web 自动在 tmux 里起来时，用户主动执行 `dsh-web autostart-on` 即可。
+
+> **端口通知策略**：`start`/`restart` 后实际端口写入 `~/.dsh/logs/last-port.txt`。
+> 端口为**默认值（3080）时不发通知**（大家都知道）；**非默认端口**（被占用/随机）
+> 才发系统通知告知实际端口——尤其自启是无人值守场景，用户需要知道连哪里。
 
 ## 约定与边界
 
