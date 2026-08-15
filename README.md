@@ -22,27 +22,28 @@
 
 ### 方式 A：通过对话使用（推荐）— 你什么都不用敲
 
-你只需要在对话里说"**帮我装 XX 插件**"（XX = 任意**其他** DSH 插件，如
-dsh-market）、"**帮我升级 dsh**"，agent 会：
+你只需要在对话里说"**帮我装 XX 插件**"（XX = 任意**其他**插件，DSH 都能装，
+如 dsh-market）、"**帮我升级 dsh**"，agent 会：
 
 1. 自动加载本 skill
 2. 执行插件安装 / 升级
-3. **自动调用** `dsh-web restart` / `dsh-web upgrade`（agent 内部直接调脚本，你全程不碰命令行）
+3. **自动调用** `dsh-web restart`（agent 内部直接调脚本，你全程不碰命令行）
 4. 你只需要**刷新一下页面**，新插件/新版本立即生效
 
 > 适用：日常通过 DSH 对话操作插件的用户。这是 skill 的**主要消费方式**——它本来就设计给 agent 用的。
 
 ### 方式 B：手动命令行使用 — 自己控制
 
-如果你习惯自己开终端操作（比如直接 `dsh plugin add`，不经过对话），**装完插件后需要手动执行一次**对应的命令：
+如果你习惯自己开终端操作（比如直接 `dsh plugin add`，不经过对话），**装完插件后手动执行一次**：
 
 ```bash
-dsh-web restart    # 装/卸/更新插件后
-dsh-web reload     # 改完 profile 配置（cordis.patch.yml）后
-dsh-web upgrade    # 升级 dsh 本体后
+dsh-web restart    # 装/卸/更新插件、改 profile 配置、升级本体后，统一用它
 dsh-web status     # 随时查看状态
 ```
 
+> **一个命令搞定所有场景**：不管你是装了插件、改了 `cordis.patch.yml` 配置、还是
+> 升级了 dsh 本体，都是同一个动作——安全重启 dsh web。所以只需要记 `dsh-web restart`。
+>
 > **为什么"多一步"省不掉**：skill 的"自动重启"触发器是 **agent**——你通过对话装插件时
 > agent 在场，能自动调起；但你自己开终端装插件时没有 agent 参与，所以必须手动跑一次。
 > **这"多一步"是一次性的**：它会把 dsh web 迁入 tmux 托管，之后任何变更（对话方式）
@@ -82,10 +83,8 @@ bash install.sh
 ## 命令
 
 ```bash
+dsh-web restart    # ★ 核心命令：装/卸/更新插件、改 profile 配置、升级本体后，统一用它
 dsh-web start      # 启动/自动接管（无会话则创建，未托管则迁入 tmux）
-dsh-web restart    # 安全自动重启（装插件后）
-dsh-web reload     # 改完 profile 配置后重启生效
-dsh-web upgrade    # 升级 dsh 本体并自动重启
 dsh-web stop       # 停止
 dsh-web status     # 查看会话/端口/PID/日志
 dsh-web attach     # 进入 tmux 排查
@@ -93,6 +92,11 @@ dsh-web autostart-on    # 启用开机自启（默认关闭，用户主动选择
 dsh-web autostart-off   # 关闭开机自启
 dsh-web autostart-status # 查看自启状态
 ```
+
+> **用户只需要记 `dsh-web restart` 一个命令**——它覆盖三种场景：装/卸/更新插件、
+> 改 profile 配置、升级 dsh 本体（升级场景由 agent 自动先升级再重启）。
+> `reload`/`upgrade` 是给 agent 内部用的语义化别名（分别对应用户改配置/升级本体的
+> 场景），普通用户不需要区分。
 
 > **开机自启是可选功能，默认关闭**——skill 不会自动启用任何自启项。需要开机后 dsh web 自动在 tmux 里起来时，用户主动执行 `dsh-web autostart-on` 即可。
 

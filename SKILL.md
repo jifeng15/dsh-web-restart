@@ -100,6 +100,11 @@ bash <skill_dir>/scripts/dsh-web.sh restart
 脚本会用 tmux run-shell 排定延迟重启，然后**告诉用户「5-8 秒后刷新页面」**。
 不需要用户手动跑任何终端命令。
 
+> **对用户统一说 `restart`**：不管装插件、改配置还是升级本体，向用户呈现的都是
+> "安全重启"这一个动作。`reload`/`upgrade` 只是 agent 内部的语义化别名——当
+> 场景明确（改配置 → reload；升级 → upgrade）时用它更精准，但不要把这些
+> 差异抛给用户去记。
+
 ### 改完 profile 配置后生效（reload）
 
 ```bash
