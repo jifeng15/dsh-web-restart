@@ -20,11 +20,23 @@
 
 ## 快速开始
 
-```bash
-# 方式一：一行安装（推荐）
-npx -y skills add https://github.com/jifeng15/dsh-web-restart -g -y -a universal --copy
+三种安装方式，任选其一：
 
-# 方式二：clone 手动安装
+**① 对话安装（推荐）**——在 DSH 对话里直接说：
+
+> "**帮我安装 dsh-web-restart**"
+
+agent 会自动完成安装并加载本 skill（skill 是热加载的，装完即用，无需重启）。
+
+**② 一行命令安装**——在自己的终端执行：
+
+```bash
+npx -y skills add https://github.com/jifeng15/dsh-web-restart -g -y -a universal --copy
+```
+
+**③ clone 手动安装**——想先看源码/自己维护时：
+
+```bash
 git clone https://github.com/jifeng15/dsh-web-restart.git && cd dsh-web-restart
 bash install.sh
 ```
