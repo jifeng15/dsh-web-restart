@@ -6,8 +6,30 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-4d6bfe)
 
 **English** | [简体中文](README.zh-CN.md)
+
+## Changelog
+
+### v2.0.0 (hot install, no restart)
+
+- 🎉 **Hot install/uninstall** — installing/removing plugins no longer restarts.
+  Bundled `dsh-web-hot` host plugin hot-applies patch rows via `include.update`
+  at runtime; **the PID never changes**.
+- ✨ New commands: `dsh-web install <spec>` (hot first, fallback to safe restart),
+  `dsh-web remove <pkg>` (hot first, fallback to safe restart).
+- 🛡️ `dsh-web session`: report the resolved tmux session (auto-discovered, never
+  assumes `dsh-web`).
+- 📦 Module-level code updates still require a restart (Node require cache) —
+  structural limit, falls back automatically.
+
+### v1.0.0 (safe restart)
+
+- First release: tmux hosting + tmux-server independent delayed restart, covering
+  plugin changes, config edits, and dsh upgrades.
+- Crash auto-restart with a 3-strike circuit breaker; port/session auto-discovery;
+  bilingual README.
 
 ## The problem it solves (what we actually hit)
 

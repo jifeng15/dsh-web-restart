@@ -6,8 +6,25 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-4d6bfe)
 
 **简体中文** | [English](README.md)
+
+## 更新记录
+
+### v2.0.0（热装免重启）
+
+- 🎉 **新增免重启热装/热卸**：装/卸插件不再需要重启——内置 `dsh-web-hot` 宿主插件，
+  通过 `include.update` 在运行中热应用 patch 行，**PID 全程不变**。
+- ✨ 新命令：`dsh-web install <spec>`（热装优先，失败回退安全重启）、
+  `dsh-web remove <pkg>`（热卸优先，失败回退安全重启）。
+- 🛡️ `dsh-web session`：随时查出实际 tmux 会话名（自动发现，不假设 `dsh-web`）。
+- 📦 模块代码级更新仍须重启（Node require 缓存）——结构性限制，自动回退。
+
+### v1.0.0（安全重启）
+
+- 首版：tmux 托管 + tmux server 独立延迟重启，覆盖装插件/改配置/升级本体。
+- 崩溃自动重启 + 3 次熔断；端口/会话自动发现；双语 README。
 
 ## 它解决什么难题（我们实际遇到的）
 
@@ -55,22 +72,26 @@ bash install.sh
 
 1. 自动加载本 skill
 2. 执行插件安装 / 升级
-3. **自动调用** `dsh-web restart`（agent 内部直接调脚本，你全程不碰命令行）
-4. 你只需要**刷新一下页面**，新插件/新版本立即生效
+3. 装插件走 **`dsh-web install`（热装免重启）**；升级本体走 `dsh-web upgrade`（先升级再安全重启）
+4. 你只需要**刷新一下页面**（装插件甚至可能不用刷新——热装是运行中生效），新插件/新版本立即生效
 
 > 适用：日常通过 DSH 对话操作插件的用户。这是 skill 的**主要使用场景**——它本来就设计给 agent 用的。
 
 ### 场景 B：手动命令行使用 — 自己控制
 
-如果你习惯自己开终端操作（比如直接 `dsh plugin add`，不经过对话），**装完插件后手动执行一次**：
+如果你习惯自己开终端操作，装/卸插件用热装命令（免重启），其他场景用统一重启：
 
 ```bash
-dsh-web restart    # 装/卸/更新插件、改 profile 配置、升级本体后，统一用它
-dsh-web status     # 随时查看状态
+dsh-web install <spec>   # 装插件：热装优先（免重启），失败回退安全重启
+dsh-web remove <pkg>     # 卸插件：热卸优先（免重启），失败回退安全重启
+dsh-web restart          # 改 profile 配置、升级本体等场景，统一安全重启
+dsh-web session          # 随时查看实际 tmux 会话名（自动发现）
+dsh-web status           # 随时查看状态
 ```
 
-> **一个命令搞定所有场景**：不管你是装了插件、改了 `cordis.patch.yml` 配置、还是
-> 升级了 dsh 本体，都是同一个动作——安全重启 dsh web。所以只需要记 `dsh-web restart`。
+> **热装优先，重启兜底**：装/卸插件默认走内置 dsh-web-hot 热装——运行中应用 patch，
+> **不用重启、PID 不变**；热装不可用（插件未加载 / 模块代码级更新 / 无法热应用）时
+> 自动回退安全重启。
 >
 > **为什么"多一步"省不掉**：skill 的"自动重启"触发器是 **agent**——你通过对话装插件时
 > agent 在场，能自动调起；但你自己开终端装插件时没有 agent 参与，所以必须手动跑一次。
@@ -84,34 +105,37 @@ dsh-web status     # 随时查看状态
 
 | ✅ **能** | ❌ **不能** |
 |---|---|
-| 装完插件后**自动重启** dsh web，你**不用手动敲任何命令**（对话方式） | agent 重启后**无缝继续对话**——重启会短暂断开，需你刷新页面（结构性限制） |
+| **热装/热卸插件**（内置 dsh-web-hot）——**免重启**（不可用时自动回退安全重启） | agent 重启后**无缝继续对话**——重启会短暂断开，需你刷新页面（结构性限制） |
+| 装完插件后**自动重启** dsh web，你**不用手动敲任何命令**（对话方式） | **模块代码级更新**无法热应用（Node require 缓存，必须重启） |
 | 改完 profile 配置（cordis.patch.yml）后 `reload` 生效 | 让 dsh web **不重启进程**就加载插件/配置（bundle 树启动时合成，必须重启进程；刷新页面只是重启后重连，不是加载手段） |
 | `upgrade` 升级 dsh 本体并自动重启 | 重启电脑后自动恢复（需要你重新 `dsh-web start` 一次） |
-| 没装 tmux？**自动帮你装**（macOS/Linux 主流包管理器） | dsh web **崩溃**时自动重启（当前只处理正常重启） |
+| 没装 tmux？**自动帮你装**（macOS/Linux 主流包管理器） | 非 npm/pnpm 安装的 dsh 本体无法自动升级（只提示） |
 | dsh web 跑在普通终端？**自动迁入 tmux** 托管 | skill 增改、AGENTS.md 修改等（这些**本来就是热加载的**，不需要它） |
-| 会话名不叫 `dsh-web`？**自动找到**实际托管会话 | 非 npm/pnpm 安装的 dsh 本体无法自动升级（只提示） |
+| 会话名不叫 `dsh-web`？**自动找到**实际托管会话 | 崩溃自动重启是独立可选功能（run-loop） |
 | 端口不是 3080？**自动发现**（含 `--port 0` 随机端口） | — |
 | 终端窗口全关，dsh web **照常运行**、随时可重启 | — |
 
-**一句话**：DSH 需要重启才能生效的变更（**装插件、改 profile 配置、升级本体**），它负责安全自动重启并让 dsh web 常驻；你只需要在页面断开后刷新一下。
+**一句话**：装/卸插件**免重启**（热装），真正必须重启的（改配置、升级本体、迁移）**安全自动重启**并让 dsh web 常驻；你只需要在页面断开后刷新一下。
 
 ## 命令
 
 ```bash
-dsh-web restart    # ★ 核心命令：装/卸/更新插件、改 profile 配置、升级本体后，统一用它
+dsh-web install <spec>   # ★ 装插件：热装优先（免重启），失败回退安全重启
+dsh-web remove <pkg>     # ★ 卸插件：热卸优先（免重启），失败回退安全重启
+dsh-web restart    # ★ 兜底/其他：装插件后、改配置、升级本体等场景统一安全重启
 dsh-web start      # 启动/自动接管（无会话则创建，未托管则迁入 tmux）
 dsh-web stop       # 停止
 dsh-web status     # 查看会话/端口/PID/日志
+dsh-web session    # 查看实际 tmux 会话名（自动发现，不假设 dsh-web）
 dsh-web attach     # 进入 tmux 排查
 dsh-web autostart-on    # 启用开机自启（默认关闭，用户主动选择；launchd/systemd）
 dsh-web autostart-off   # 关闭开机自启
 dsh-web autostart-status # 查看自启状态
 ```
 
-> **用户只需要记 `dsh-web restart` 一个命令**——它覆盖三种场景：装/卸/更新插件、
-> 改 profile 配置、升级 dsh 本体（升级场景由 agent 自动先升级再重启）。
-> `reload`/`upgrade` 是给 agent 内部用的语义化别名（分别对应用户改配置/升级本体的
-> 场景），普通用户不需要区分。
+> **热装优先，重启兜底**：`dsh-web install/remove` 先走内置 dsh-web-hot 热装——
+> **免重启**；热装不可用（插件未加载 / 变更无法热应用）时自动回退安全重启。
+> `dsh-web restart` 仍是其他场景（改配置、升级本体、迁移）的统一命令。
 
 > **开机自启是可选功能，默认关闭**——skill 不会自动启用任何自启项。需要开机后 dsh web 自动在 tmux 里起来时，用户主动执行 `dsh-web autostart-on` 即可。
 
