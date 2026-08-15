@@ -178,6 +178,13 @@ tmux server is an independent daemon — it doesn't depend on dsh web being aliv
 2. `nohup ... &` background tasks get cleaned up when the caller's turn ends → use tmux server
 3. GitHub tarball URL plugin installs leave pnpm lockfile missing `integrity` → use `github:owner/repo#ref`
 
+## Project Docs
+
+- [AGENTS.md](AGENTS.md) — agent instructions & project conventions
+- [specs.md](specs.md) — technical spec (architecture, commands, data flow, limits)
+- [handoff.md](handoff.md) — project status, recent changes, known issues, handoff
+- [version.md](version.md) — version history & release process
+
 ## License
 
 MIT

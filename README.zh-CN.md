@@ -175,6 +175,13 @@ tmux server 是独立守护进程，不依赖 dsh web 存活——即使调用�
 2. `nohup ... &` 排定后台任务会被调用方回合清理 → 用 tmux server
 3. GitHub tarball URL 装插件会让 pnpm 锁文件缺 integrity → 用 `github:owner/repo#ref`
 
+## 项目文档
+
+- [AGENTS.md](AGENTS.md) — agent 指令与项目约定
+- [specs.md](specs.md) — 技术规格（架构、命令、数据流、限制）
+- [handoff.md](handoff.md) — 项目状态、最近变更、已知问题、交接
+- [version.md](version.md) — 版本历史与发布流程
+
 ## License
 
 MIT
