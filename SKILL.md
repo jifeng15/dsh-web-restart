@@ -126,6 +126,23 @@ bash <skill_dir>/scripts/dsh-web.sh stop     # Ctrl-C 停止
 bash <skill_dir>/scripts/dsh-web.sh attach   # tmux attach 进去看实时日志
 ```
 
+## 本工具是「重启服务」，不是「热重载」
+
+必须先说清这个定位，避免误用：
+
+- **热重载（Hot Reload）**：进程不重启，运行中替换模块/配置。DSH 对
+  skill 增改（Chokidar 监视）、AGENTS.md（touch 驱动）、插件源码改动（HMR）、
+  settings.yaml / 凭据（Chokidar 热发布）、agent preset（无缓存发现）都是热重载。
+- **重启服务（Service Restart）**：杀进程重新启动，整个应用重新初始化。
+  DSH 对**插件 bundle 层、profile patch 层、本体版本**这三类变更**设计上就是
+  启动时合成**，没有热重载路径，必须重启。
+
+本工具做的是**重启服务**：它不提供热重载，而是把"必须重启才能生效的变更"
+变得**安全、自动、不掉线**（用 tmux server 独立执行延迟重启，避免杀掉 agent 宿主）。
+
+> 判断标准：**能热重载的不归它管**（skill/AGENTS.md/settings/凭据/preset 的变更
+> 直接生效）；**必须重启的归它管**（装插件/改 profile 配置/升级本体）。
+
 ## 边界（务必向用户说明）
 
 - **终端全部关闭不影响**：tmux server 是独立守护进程，终端只是客户端，detach 后
@@ -133,6 +150,11 @@ bash <skill_dir>/scripts/dsh-web.sh attach   # tmux attach 进去看实时日志
 - **重启电脑 / `tmux kill-server` 后**：一切重新开始，需要用户手动重新进入
   （`tmux new -s dsh-web "dsh web"` 或 `dsh-web.sh start`）。这不是"重建会话"，
   就是正常重新启动。
+- **MCP 连接故障恢复**：MCP 服务器配置（settings 分节）是热重载的，不需要本工具；
+  但**已建立的 MCP 连接**若断线且重连被禁用，DSH 源码提示 "reload the plugin or
+  restart the Host to reconnect"——这是**故障恢复**场景（连接断了连不上），
+  不是配置变更场景。遇到 MCP 工具注册失败/连不上时，可用 `dsh-web.sh restart`
+  重启 Host 恢复连接。
 
 ## 踩过的坑（避免重蹈）
 
