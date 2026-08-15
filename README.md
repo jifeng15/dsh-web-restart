@@ -22,9 +22,9 @@
 
 三种安装方式，任选其一：
 
-**① 对话安装（推荐）**——在 DSH 对话里直接说：
+**① 对话安装（推荐）**——在 DSH 对话里说（**记得附上仓库地址**，agent 才能知道去哪安装）：
 
-> "**帮我安装 dsh-web-restart**"
+> "**帮我安装 https://github.com/jifeng15/dsh-web-restart**"
 
 agent 会自动完成安装并加载本 skill（skill 是热加载的，装完即用，无需重启）。
 
