@@ -25,7 +25,7 @@
 #
 # 约定：
 #   - tmux 会话名：dsh-web（可用 DSH_WEB_SESSION 覆盖）
-#   - 端口：3080（可用 DSH_WEB_PORT 覆盖）
+#   - 端口：自动发现（DSH_WEB_PORT 显式 > 进程命令行 --port > node 监听扫描 > 默认 3080）
 #   - 启动命令：dsh web（可用 DSH_CMD 覆盖）
 #
 # 边界：
@@ -41,6 +41,54 @@ LOG_DIR="${DSH_LOG_DIR:-$HOME/.dsh/logs}"
 
 log()  { echo "==> $*"; }
 die()  { echo "!! $*" >&2; exit 1; }
+
+# 找出疑似 dsh web 的进程 PID 列表（ps 优先，pgrep 兜底；macOS 的 pgrep -f 对带空格模式不可靠）
+dsh_web_pids() {
+  local pids
+  pids="$(ps -axo pid,command 2>/dev/null | awk '$2 ~ /dsh$/ || $0 ~ /dsh web/ {print $1}' | head -5)"
+  if [ -z "${pids}" ]; then
+    pids="$(pgrep -f "dsh web" 2>/dev/null | head -5)"
+  fi
+  printf '%s' "${pids}"
+}
+
+# 自动发现 dsh web 实际监听的端口（用户可能用 --port 8080 或 --port 0 随机端口启动）。
+# 优先级：DSH_WEB_PORT 显式配置 > 从 dsh web 进程命令行解析 --port/-p > 进程监听端口 > node 监听扫描 > 默认 3080
+discover_port() {
+  [ -n "${DSH_WEB_PORT:-}" ] && { PORT="${DSH_WEB_PORT}"; log "使用显式端口: ${PORT}"; return 0; }
+  local pids pid cmdline p
+  pids="$(dsh_web_pids)"
+  # 方式一：从进程命令行解析 --port/-p（ps 在部分环境可用）
+  for pid in ${pids}; do
+    cmdline="$(ps -p "${pid}" -o command= 2>/dev/null)"
+    [ -z "${cmdline}" ] && continue
+    p="$(printf '%s' "${cmdline}" | sed -nE 's/.*--port[= ]+([0-9]+).*/\1/p; s/.*-p[= ]+([0-9]+).*/\1/p' | head -1)"
+    # --port 0 表示"让 OS 选随机端口"，无法从命令行得知实际端口，继续走扫描
+    if [ -n "${p}" ] && [ "${p}" != "0" ]; then
+      PORT="${p}"
+      log "从进程命令行解析端口: ${PORT}（PID ${pid}）"
+      return 0
+    fi
+  done
+  # 方式二：优先用 dsh web PID 精确查其监听端口
+  for pid in ${pids}; do
+    p="$(lsof -nP -a -p "${pid}" -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR>1 {split($9,a,":"); print a[length(a)]}' | head -1)"
+    if [ -n "${p}" ]; then
+      PORT="${p}"
+      log "从 dsh web 进程（PID ${pid}）监听端口解析: ${PORT}"
+      return 0
+    fi
+  done
+  # 方式三：扫描 node 进程监听的端口（lsof 全量，兜底）
+  p="$(lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | awk '$1=="node" && $9 ~ /127\.0\.0\.1:|localhost:/ {split($9,a,":"); print a[length(a)]}' | head -1)"
+  if [ -n "${p}" ]; then
+    PORT="${p}"
+    log "从 node 监听端口解析: ${PORT}"
+    return 0
+  fi
+  PORT="${PORT:-3080}"
+  log "未发现自定义端口，使用默认: ${PORT}"
+}
 
 # 确保 tmux 可用：缺失时尝试自动安装（install-tmux.sh 与脚本同目录）
 require_tmux() {
@@ -294,6 +342,7 @@ cmd_attach() {
 }
 
 require_tmux
+discover_port
 
 case "${1:-}" in
   start)   cmd_start ;;
