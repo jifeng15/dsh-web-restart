@@ -91,6 +91,29 @@ bash <skill_dir>/scripts/dsh-web.sh restart   # 重启/自动接管（agent 装�
 「托管了 dsh web」的任意会话（判定：端口有监听 + 某 pane 前台是 node），
 然后对该会话执行操作。所以对方用 `0`、`mysession` 等任意名字托管也能工作。
 
+### 首次使用：确保 hot-plugin（dsh-web-hot）已安装（agent 自动补装）
+
+热装（免重启）依赖宿主插件 `dsh-web-hot`。**如果用户是通过 `npx skills add`
+装的本 skill，hot-plugin 不会被自动装进 profile**（skills CLI 只拷文件）。
+agent 应主动补装：
+
+1. 检查 profile 是否已挂载 hot-plugin：
+   ```bash
+   grep -q "dsh-web-hot" ~/.dsh/profiles/web/package.json 2>/dev/null \
+     && echo present || echo missing
+   ```
+   （或直接调用 `dsh-web.sh status`，观察输出是否有热装提示）
+2. 若缺失，自动补装（`<skill_dir>` 是本 skill 的 base directory）：
+   ```bash
+   dsh plugin --profile web add "link:<skill_dir>/hot-plugin"
+   ```
+3. 补装后需要一次安全重启让 hot-plugin 生效（agent 调用 `dsh-web.sh restart`，
+   并告诉用户「5-8 秒后刷新页面」）。
+4. 之后 `dsh-web install/remove` 自动走免重启热装。
+
+> 若补装失败（如 pnpm 缺失），**降级为安全重启**——功能依然完整，只是
+> 装插件要走 `restart` 而不是免重启。不要因此阻塞用户的插件安装请求。
+
 ### 装完插件后：优先热装（免重启），失败才重启
 
 **装/卸插件优先用 `install`/`remove`（热装免重启）**：
@@ -100,8 +123,8 @@ bash <skill_dir>/scripts/dsh-web.sh install <spec>   # 热装，免重启
 bash <skill_dir>/scripts/dsh-web.sh remove <pkg>     # 热卸，免重启
 ```
 
-- 若 dsh-web-hot 插件已加载（`install.sh` 会自动装），走**免重启热装**——pnpm add
-  + 写 patch 层 + include.update 热应用，用户无感。
+- 若 dsh-web-hot 插件已加载（`install.sh` 会自动装，或 agent 按上面步骤补装），
+  走**免重启热装**——pnpm add + 写 patch 层 + include.update 热应用，用户无感。
 - 若热装不可用（插件未加载 / 变更无法热应用），**自动回退安全重启**。
 - **模块代码级更新**（改插件源码后重装）无法热应用（Node require 缓存），
   必然回退重启——这是结构性限制，不是 bug。
