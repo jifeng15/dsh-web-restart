@@ -49,6 +49,16 @@ tmux run-shell -b "sleep 3; tmux send-keys -t dsh-web C-c; sleep 2; tmux send-ke
 | 启动命令 | `dsh web` | `DSH_CMD` |
 | 日志 | `~/.dsh/logs/dsh-web.log`、`auto-restart.log` | `DSH_LOG_DIR` |
 
+## tmux 依赖自动处理
+
+本 skill 依赖 tmux，但**不需要对方预先安装**：
+
+- 每次执行 `dsh-web.sh` 时，若检测到 `tmux` 不在 PATH，会自动调用
+  `scripts/install-tmux.sh` 尝试安装（支持 Homebrew / apt / dnf / yum /
+  pacman / apk / zypper，macOS、Linux 均可）。
+- `install.sh` 一键安装时也会顺带检测并安装 tmux。
+- 若自动安装失败（如缺 sudo 权限），脚本会给出各平台手动安装命令，不阻塞使用提示。
+
 ## 操作步骤
 
 ### 首次托管（dsh web 还没跑在 tmux 里）

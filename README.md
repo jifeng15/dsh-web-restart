@@ -27,6 +27,10 @@ bash install.sh
 - Skill → `~/.agents/skills/dsh-web-restart/`（agent 自动加载，装完插件自动帮你重启）
 - 命令行 → `~/bin/dsh-web`
 
+> **无需预装 tmux**：安装时（`install.sh`）会自动检测，缺失则用
+> `scripts/install-tmux.sh` 自动安装（支持 macOS Homebrew 与主流 Linux 包管理器）；
+> 每次运行 `dsh-web` 时也会防呆检测。自动安装失败会提示各平台手动命令。
+
 ## 使用
 
 ```bash

@@ -34,6 +34,23 @@ LOG_DIR="${DSH_LOG_DIR:-$HOME/.dsh/logs}"
 log()  { echo "==> $*"; }
 die()  { echo "!! $*" >&2; exit 1; }
 
+# 确保 tmux 可用：缺失时尝试自动安装（install-tmux.sh 与脚本同目录）
+require_tmux() {
+  if command -v tmux >/dev/null 2>&1; then
+    return 0
+  fi
+  local installer
+  installer="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install-tmux.sh"
+  log "未检测到 tmux，尝试自动安装..."
+  if [ -f "${installer}" ]; then
+    bash "${installer}"
+  else
+    die "缺少 install-tmux.sh，且 tmux 不可用；请先手动安装 tmux"
+  fi
+  command -v tmux >/dev/null 2>&1 || die "tmux 安装失败，请手动安装后重试"
+  log "tmux 就绪"
+}
+
 is_listening() { lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN -t >/dev/null 2>&1; }
 
 has_session()  { tmux has-session -t "${SESSION}" 2>/dev/null; }
@@ -111,6 +128,8 @@ cmd_attach() {
   has_session || die "无会话 ${SESSION}，请先 start"
   exec tmux attach -t "${SESSION}"
 }
+
+require_tmux
 
 case "${1:-}" in
   start)   cmd_start ;;
