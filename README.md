@@ -18,21 +18,34 @@
 
 **这个 skill 把"热重载"和"热重启"同步起来**——让 DSH 该热重载的继续热重载（skill、AGENTS.md、settings 本来就是），该重启的**由 agent 自动安全地重启**，让 dsh web 实现**真正的热装载**：你只管在对话里装插件，刷新一下就能实时看到效果，**不用再手动去重启**。
 
-## 两种使用方式（都支持）
+## 快速开始
 
-### 方式 A：通过对话使用（推荐）— 你什么都不用敲
+```bash
+# 方式一：一行安装（推荐）
+npx -y skills add https://github.com/jifeng15/dsh-web-restart -g -y -a universal --copy
 
-你只需要在对话里说"**帮我装 XX 插件**"（XX = 任意**其他**插件，DSH 都能装，
-如 dsh-market）、"**帮我升级 dsh**"，agent 会：
+# 方式二：clone 手动安装
+git clone https://github.com/jifeng15/dsh-web-restart.git && cd dsh-web-restart
+bash install.sh
+```
+
+装完即可用（见下方"两种使用场景"）。
+
+## 两种使用场景（都支持）
+
+### 场景 A：通过对话使用（推荐）— 你什么都不用敲
+
+你只需要**安装了本 skill 后**，在对话里说"**帮我装 XX 插件**"（XX = 任意**其他**
+插件，如 dsh-market）、"**帮我升级 dsh**"，agent 会：
 
 1. 自动加载本 skill
 2. 执行插件安装 / 升级
 3. **自动调用** `dsh-web restart`（agent 内部直接调脚本，你全程不碰命令行）
 4. 你只需要**刷新一下页面**，新插件/新版本立即生效
 
-> 适用：日常通过 DSH 对话操作插件的用户。这是 skill 的**主要消费方式**——它本来就设计给 agent 用的。
+> 适用：日常通过 DSH 对话操作插件的用户。这是 skill 的**主要使用场景**——它本来就设计给 agent 用的。
 
-### 方式 B：手动命令行使用 — 自己控制
+### 场景 B：手动命令行使用 — 自己控制
 
 如果你习惯自己开终端操作（比如直接 `dsh plugin add`，不经过对话），**装完插件后手动执行一次**：
 
@@ -66,19 +79,6 @@ dsh-web status     # 随时查看状态
 | 终端窗口全关，dsh web **照常运行**、随时可重启 | — |
 
 **一句话**：DSH 需要重启才能生效的变更（**装插件、改 profile 配置、升级本体**），它负责安全自动重启并让 dsh web 常驻；你只需要在页面断开后刷新一下。
-
-## 快速开始
-
-```bash
-# 方式一：一行安装（推荐）
-npx -y skills add https://github.com/jifeng15/dsh-web-restart -g -y -a universal --copy
-
-# 方式二：clone 手动安装
-git clone https://github.com/jifeng15/dsh-web-restart.git && cd dsh-web-restart
-bash install.sh
-```
-
-装完即可用（见上方"两种使用方式"）。
 
 ## 命令
 
