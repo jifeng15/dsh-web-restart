@@ -1,1 +1,6 @@
 node_modules/
+# 内部工作文档（本地保留，不上 GitHub）
+AGENTS.md
+specs.md
+handoff.md
+version.md
