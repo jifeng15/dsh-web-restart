@@ -16,6 +16,7 @@
 #   dsh-web.sh stop      停止 dsh web
 #   dsh-web.sh status    查看状态（会话 / 端口 / PID）
 #   dsh-web.sh attach    进入 tmux 会话（手动排查用）
+#   dsh-web.sh report-port  把实际端口写入 last-port.txt 并发系统通知
 #
 # 需要重启的 DSH 变更场景（本脚本的适用范围）：
 #   1. 装/卸/更新插件（bundle 层变更）→ restart
@@ -213,6 +214,25 @@ wait_port() {
   log "等待 ${PORT} 超时（${n}s）"; return 1
 }
 
+# 端口报告：start/restart 完成后，把实际端口写入 last-port.txt 并（可选）发系统通知。
+# 开机自启是无人值守场景，用户看不到终端输出，靠这个文件 + 通知知道端口。
+report_port() {
+  # 重新探测一次实际端口（wait_port 后端口应已稳定）
+  discover_port >/dev/null 2>&1 || true
+  local portfile="${LOG_DIR}/last-port.txt"
+  printf '%s\n' "${PORT}" > "${portfile}"
+  log "实际端口已记录: ${portfile} → ${PORT}"
+  # macOS 通知中心（osascript）；Linux 用 notify-send（存在时）
+  local msg="dsh web 已就绪 → http://127.0.0.1:${PORT}"
+  if command -v osascript >/dev/null 2>&1; then
+    osascript -e "display notification \"${msg}\" with title \"dsh-web-restart\"" >/dev/null 2>&1 || true
+    log "已发送 macOS 通知（端口 ${PORT}）"
+  elif command -v notify-send >/dev/null 2>&1; then
+    notify-send "dsh-web-restart" "${msg}" >/dev/null 2>&1 || true
+    log "已发送系统通知（端口 ${PORT}）"
+  fi
+}
+
 cmd_start() {
   mkdir -p "${LOG_DIR}"
   resolve_session || true   # 找不到 dsh-web 时自动发现托管会话
@@ -226,6 +246,7 @@ cmd_start() {
     create_session
     wait_port 20
   fi
+  report_port
   log "访问 http://127.0.0.1:${PORT}"
 }
 
@@ -248,6 +269,8 @@ cmd_restart() {
   # - 不要在括号内用 $SESSION 外层展开出问题：tmux run-shell 以 server 环境执行。
   log "由 tmux server 排定自动重启（约 5-8 秒完成，页面会短暂断开）"
   tmux run-shell -b "sleep 3; tmux send-keys -t ${SESSION} C-c; sleep 2; tmux send-keys -t ${SESSION} '${DSH_CMD}' Enter; echo \"dsh-web restarted \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
+  # 延迟探测重启后的实际端口（等 6 秒新进程接管），写入 last-port.txt 并通知
+  ( sleep 6; "${BASH_SOURCE[0]}" report-port ) >/dev/null 2>&1 &
   log "已排定；请稍后刷新 http://127.0.0.1:${PORT}"
 }
 
@@ -349,6 +372,7 @@ case "${1:-}" in
   restart) cmd_restart ;;
   reload)  cmd_reload ;;
   upgrade) cmd_upgrade ;;
+  report-port) report_port ;;
   stop)    cmd_stop ;;
   status)  cmd_status ;;
   attach)  cmd_attach ;;
