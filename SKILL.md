@@ -1,27 +1,34 @@
 ---
 name: dsh-web-restart
 description: >
-  安全地托管与重启 DeepSeek Harness Web（dsh web）。当需要重启 dsh web 以让
-  新安装的插件 bundle 生效时使用：通过 tmux 托管 + tmux server 独立执行延迟重启，
-  避免「杀掉 dsh web 进程 = 杀掉正在其中运行的 agent 会话」导致重启命令自身中断。
-  Use when the user asks to restart dsh web after installing plugins, when dsh web
-  needs to run persistently without a terminal, when a plugin install requires a
-  restart to activate, or when dsh web is down and needs to be brought back up
-  inside tmux.
-version: 1.0.0
+  安全地托管与重启 DeepSeek Harness Web（dsh web）。当 DSH 出现「必须重启才能生效」
+  的变更时使用：安装/卸载/更新插件（bundle 层变更）、修改 profile 配置
+  （cordis.patch.yml）、升级 dsh 本体（npm 全局包）。通过 tmux 托管 + tmux server
+  独立执行延迟重启，避免「杀掉 dsh web 进程 = 杀掉正在其中运行的 agent 会话」导致
+  重启命令自身中断。Use when the user asks to restart dsh web after installing or
+  removing plugins, after editing profile config (cordis.patch.yml), after upgrading
+  the dsh package, when dsh web needs to run persistently without a terminal, or when
+  dsh web is down and needs to be brought back up inside tmux.
+version: 1.1.0
 license: MIT
 metadata:
   dsh:
-    tags: [dsh, deepseek-harness, tmux, restart, plugin, web, operations]
+    tags: [dsh, deepseek-harness, tmux, restart, plugin, upgrade, config, web, operations]
 ---
 
 # dsh-web-restart — 安全重启 DSH Web
 
 ## 背景：为什么「重启 dsh web」是个坑
 
-DSH 是「一切皆插件」的框架：**安装新插件（`dsh plugin --profile web add ...`）后，
-必须重启 dsh web 才能让新 bundle 层生效**（bundle 清单在启动时合成，HMR 只热更新
-「已装插件源码改动」，不覆盖「新增 bundle 层」）。
+DSH 是「一切皆插件」的框架：以下变更**必须重启 dsh web 才能生效**（bundle 树/配置
+在启动时合成，没有热重载）：
+
+1. **装/卸/更新插件**（`dsh plugin --profile web add|remove|update ...`）— bundle 层变更
+2. **修改 profile 配置**（`~/.dsh/profiles/web/cordis.patch.yml`）— 用户 patch 层
+3. **dsh 本体升级**（`npm install -g @deepseek-ai/dsh@latest`）— 新版本进程
+
+**不需要重启的**（热加载/自动生效）：skill 增改（Chokidar 实时监视）、AGENTS.md
+修改（touch 驱动）、已装插件源码改动（HMR）。
 
 难点在于：**dsh web 进程本身承载着正在运行的 agent 会话**。如果同步执行
 「kill 进程 → 重新启动」，等于杀掉当前执行命令的宿主，命令会当场中断（表现为
@@ -92,6 +99,24 @@ bash <skill_dir>/scripts/dsh-web.sh restart
 
 脚本会用 tmux run-shell 排定延迟重启，然后**告诉用户「5-8 秒后刷新页面」**。
 不需要用户手动跑任何终端命令。
+
+### 改完 profile 配置后生效（reload）
+
+```bash
+bash <skill_dir>/scripts/dsh-web.sh reload
+```
+
+改 `~/.dsh/profiles/web/cordis.patch.yml` 等 profile 配置后，配置只在下次启动时
+合成，必须重启；`reload` 与 `restart` 等价，但语义明确是"配置变更后生效"。
+
+### 升级 dsh 本体后生效（upgrade）
+
+```bash
+bash <skill_dir>/scripts/dsh-web.sh upgrade
+```
+
+自动检测安装方式（npm 全局 / pnpm 全局），执行 `@deepseek-ai/dsh@latest` 升级，
+然后自动重启加载新版本。非 npm/pnpm 安装（源码、其他方式）时只提示手动升级。
 
 ### 查看状态 / 停止 / 进入排查
 

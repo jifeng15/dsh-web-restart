@@ -9,11 +9,19 @@
 # 即使调用方（agent 会话）随 dsh web 被杀，重启依然会完成。
 #
 # 用法：
-#   dsh-web.sh start    启动 dsh web（无 tmux 会话则自动创建）
-#   dsh-web.sh restart  安全自动重启（推荐给 agent 调用，由 tmux server 执行）
-#   dsh-web.sh stop     停止 dsh web
-#   dsh-web.sh status   查看状态（会话 / 端口 / PID）
-#   dsh-web.sh attach   进入 tmux 会话（手动排查用）
+#   dsh-web.sh start     启动 dsh web（无 tmux 会话则自动创建）
+#   dsh-web.sh restart   安全自动重启（推荐给 agent 调用，由 tmux server 执行）
+#   dsh-web.sh reload    改完 profile 配置（cordis.patch.yml）后重启生效（= restart）
+#   dsh-web.sh upgrade   升级 dsh 本体（npm 全局）后自动重启生效
+#   dsh-web.sh stop      停止 dsh web
+#   dsh-web.sh status    查看状态（会话 / 端口 / PID）
+#   dsh-web.sh attach    进入 tmux 会话（手动排查用）
+#
+# 需要重启的 DSH 变更场景（本脚本的适用范围）：
+#   1. 装/卸/更新插件（bundle 层变更）→ restart
+#   2. 修改 profile 配置（cordis.patch.yml / package.json bundles）→ reload
+#   3. dsh 本体升级（npm 全局包）→ upgrade
+#   （skill 增改、AGENTS.md 修改、插件源码改动是热加载的，不需要重启）
 #
 # 约定：
 #   - tmux 会话名：dsh-web（可用 DSH_WEB_SESSION 覆盖）
@@ -211,6 +219,55 @@ cmd_stop() {
   fi
 }
 
+# 修改 profile 配置（cordis.patch.yml 等）后重启生效。配置在启动时合成，
+# 没有热重载，必须重启；本命令与 restart 等价，但语义更清晰。
+cmd_reload() {
+  log "profile 配置变更需要重启才能合成进 bundle 树，正在重启..."
+  cmd_restart
+}
+
+# 升级 dsh 本体（npm 全局包）后自动重启生效。
+# 支持：npm 全局安装（标准）；其他安装方式（pnpm/源码）给出提示，仅重启。
+cmd_upgrade() {
+  local pkg_manager="npm" bin_path bin_real
+  bin_path="$(command -v dsh 2>/dev/null)"
+  if [ -z "${bin_path}" ]; then
+    die "未找到 dsh 命令，请先安装 @deepseek-ai/dsh"
+  fi
+  # 解析符号链接拿真实路径，再判断是否为 npm 全局安装
+  if command -v readlink >/dev/null 2>&1; then
+    bin_real="$(readlink -f "${bin_path}" 2>/dev/null || readlink "${bin_path}" 2>/dev/null || echo "${bin_path}")"
+  else
+    bin_real="${bin_path}"
+  fi
+  # 检测是否为 npm 全局安装（/node_modules/@deepseek-ai/dsh 路径特征）
+  if [[ "${bin_real}" == *"node_modules/@deepseek-ai/dsh"* ]]; then
+    pkg_manager="npm"
+  elif [ -n "${PNPM_HOME:-}" ] && [[ "${bin_real}" == *"${PNPM_HOME}"* ]]; then
+    pkg_manager="pnpm"
+  else
+    pkg_manager="other"
+  fi
+  log "dsh 安装方式: ${pkg_manager}（$(dsh --version 2>/dev/null)）"
+  case "${pkg_manager}" in
+    npm)
+      log "执行: npm install -g @deepseek-ai/dsh@latest"
+      npm install -g @deepseek-ai/dsh@latest 2>&1 | tail -3 || die "npm 升级失败"
+      ;;
+    pnpm)
+      log "执行: pnpm add -g @deepseek-ai/dsh@latest"
+      pnpm add -g @deepseek-ai/dsh@latest 2>&1 | tail -3 || die "pnpm 升级失败"
+      ;;
+    *)
+      log "检测到非 npm/pnpm 安装（${bin_path}），无法自动升级；请手动升级后运行 restart"
+      return 0
+      ;;
+  esac
+  log "升级完成: $(dsh --version 2>/dev/null)"
+  log "正在重启 dsh web 以加载新版本..."
+  cmd_restart
+}
+
 cmd_status() {
   resolve_session || true   # 找不到 dsh-web 时自动发现托管会话
   echo "--- tmux 会话 ---"
@@ -241,8 +298,10 @@ require_tmux
 case "${1:-}" in
   start)   cmd_start ;;
   restart) cmd_restart ;;
+  reload)  cmd_reload ;;
+  upgrade) cmd_upgrade ;;
   stop)    cmd_stop ;;
   status)  cmd_status ;;
   attach)  cmd_attach ;;
-  *) die "用法: dsh-web.sh {start|restart|stop|status|attach}" ;;
+  *) die "用法: dsh-web.sh {start|restart|reload|upgrade|stop|status|attach}" ;;
 esac
