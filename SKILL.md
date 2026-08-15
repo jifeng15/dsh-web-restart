@@ -152,9 +152,10 @@ bash <skill_dir>/scripts/dsh-web.sh attach   # tmux attach 进去看实时日志
 
 - **终端全部关闭不影响**：tmux server 是独立守护进程，终端只是客户端，detach 后
   会话与 dsh web 继续运行，自动重启照常可用。
-- **重启电脑 / `tmux kill-server` 后**：一切重新开始，需要用户手动重新进入
-  （`tmux new -s dsh-web "dsh web"` 或 `dsh-web.sh start`）。这不是"重建会话"，
-  就是正常重新启动。
+- **重启电脑 / `tmux kill-server` 后**：一切重新开始，需要用户重新打开 dsh web。
+  **用任何习惯的方式都行**：`dsh-web.sh start` 最省事（一步建 tmux + 启动 + 托管）；
+  直接 `dsh web`（或 `tmux new -s dsh-web "dsh web"`）也可以——第一次 `restart`
+  会自动迁入 tmux（多一次自动迁移，之后全自动）。这不是"重建会话"，就是正常重新启动。
 - **MCP 连接故障恢复**：MCP 服务器配置（settings 分节）是热重载的，不需要本工具；
   但**已建立的 MCP 连接**若断线且重连被禁用，DSH 源码提示 "reload the plugin or
   restart the Host to reconnect"——这是**故障恢复**场景（连接断了连不上），

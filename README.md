@@ -94,7 +94,9 @@ dsh-web attach     # 进入 tmux 排查
 
 - **端口自动发现**：用户用 `--port 8080` 或 `--port 0`（随机端口）启动 dsh web 也能正确工作——脚本会从进程命令行或实际监听端口自动解析，无需手动指定。
 - 终端全关不影响：tmux server 是守护进程，detach 后继续运行。
-- 重启电脑 / `tmux kill-server` 后：重新 `dsh-web start` 即可（正常重新启动，不是"重建"）。
+- 重启电脑 / `tmux kill-server` 后：**用你习惯的方式重新打开 dsh web 即可**——
+  `dsh-web start` 最省事（一步建 tmux + 启动 + 托管）；直接 `dsh web` 也可以，
+  第一次 `restart` 会自动迁入 tmux（多一次自动迁移，之后全自动）。
 - 无法自动安装 tmux 时会打印各平台手动命令。
 
 ## 原理（30 秒版）
