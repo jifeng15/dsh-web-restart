@@ -80,6 +80,10 @@ bash <skill_dir>/scripts/dsh-web.sh restart   # 重启/自动接管（agent 装�
 > `start` / `restart` 会自己完成「无 tmux 就装、没托管就接管、托管了就重启」。
 > （手动 `tmux new -s dsh-web "dsh web"` 仍是可用的备选方式，但不是必需。）
 
+**会话名不叫 `dsh-web` 也没关系**：脚本找不到 `dsh-web` 会话时，会自动发现
+「托管了 dsh web」的任意会话（判定：端口有监听 + 某 pane 前台是 node），
+然后对该会话执行操作。所以对方用 `0`、`mysession` 等任意名字托管也能工作。
+
 ### 装完插件后自动重启（agent 推荐调用）
 
 ```bash
