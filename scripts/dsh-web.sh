@@ -55,6 +55,52 @@ is_listening() { lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN -t >/dev/null 2>&1; }
 
 has_session()  { tmux has-session -t "${SESSION}" 2>/dev/null; }
 
+# 找出占用端口的进程 PID（未被 tmux 托管的旧 dsh web）
+port_pid() { lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN -t 2>/dev/null | head -1; }
+
+# 创建托管会话（不立即启动 dsh web，避免与旧进程端口冲突）
+create_session() {
+  tmux new-session -d -s "${SESSION}" "exec ${DSH_CMD} 2>&1 | tee ${LOG_DIR}/dsh-web.log"
+}
+
+# 自动接管：检测到「无 tmux 会话 + 端口已有 dsh web」时，
+# 由 tmux server 延迟执行「停旧进程 → 在托管会话里拉起」，无需用户手动 tmux。
+migrate_into_tmux() {
+  local pid
+  pid="$(port_pid)"
+  if [ -z "${pid}" ]; then
+    return 1  # 端口无监听，无需迁移
+  fi
+  log "检测到未被托管的 dsh web（PID ${pid}，端口 ${PORT}），正在自动迁入 tmux..."
+  create_session
+  # 由 tmux server 执行，调用方（agent/终端）被杀也不影响迁移完成
+  tmux run-shell -b "sleep 2; kill -TERM ${pid} 2>/dev/null; sleep 2; tmux send-keys -t ${SESSION} C-c; sleep 1; tmux send-keys -t ${SESSION} '${DSH_CMD}' Enter; echo \"dsh-web migrated \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
+  log "已排定迁移：旧进程停止后 dsh web 将在 tmux 会话 ${SESSION} 中重启（5-8 秒）"
+  return 0
+}
+
+# 等待端口由「新托管进程」接管：先等旧进程退出（端口短暂释放），再等新进程监听。
+# 若直接等端口就绪，会误判为旧进程仍在监听。返回 0=新进程已就绪。
+wait_port_migrated() {
+  local pid_old pid_new n=25
+  pid_old="$(port_pid)"
+  # 阶段一：等旧进程退出（最多 10s）
+  for _ in $(seq 1 10); do
+    if [ -z "$(port_pid)" ]; then log "旧进程已退出，端口释放"; break; fi
+    sleep 1
+  done
+  # 阶段二：等新进程接管（最多 15s）
+  for _ in $(seq 1 15); do
+    pid_new="$(port_pid)"
+    if [ -n "${pid_new}" ] && [ "${pid_new}" != "${pid_old}" ]; then
+      log "新进程（PID ${pid_new}）已接管端口 ${PORT}"
+      return 0
+    fi
+    sleep 1
+  done
+  log "等待新进程接管超时"; return 1
+}
+
 wait_port() {
   local n="${1:-20}"
   for _ in $(seq 1 "${n}"); do
@@ -68,18 +114,27 @@ cmd_start() {
   mkdir -p "${LOG_DIR}"
   if has_session; then
     log "tmux 会话 ${SESSION} 已存在（若 dsh web 未运行，请用 restart）"
+  elif migrate_into_tmux; then
+    wait_port_migrated
+    log "迁移完成：dsh web 已托管在 tmux 会话 ${SESSION}"
   else
     log "创建 tmux 会话 ${SESSION} 并启动 dsh web"
-    tmux new-session -d -s "${SESSION}" "exec ${DSH_CMD} 2>&1 | tee ${LOG_DIR}/dsh-web.log"
+    create_session
+    wait_port 20
   fi
-  wait_port 20
   log "访问 http://127.0.0.1:${PORT}"
 }
 
 cmd_restart() {
   mkdir -p "${LOG_DIR}"
   if ! has_session; then
-    log "无 tmux 会话 ${SESSION}，改为直接启动"
+    log "无 tmux 会话 ${SESSION}"
+    if migrate_into_tmux; then
+      wait_port_migrated
+      log "迁移完成；请稍后刷新 http://127.0.0.1:${PORT}"
+      return 0
+    fi
+    log "改为直接启动"
     cmd_start
     return $?
   fi
