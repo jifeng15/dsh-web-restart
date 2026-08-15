@@ -107,8 +107,10 @@ agent 应主动补装：
    ```bash
    dsh plugin --profile web add "link:<skill_dir>/hot-plugin"
    ```
-3. 补装后需要一次安全重启让 hot-plugin 生效（agent 调用 `dsh-web.sh restart`，
-   并告诉用户「5-8 秒后刷新页面」）。
+3. **把用户要装的插件一起装上，一次重启搞定**：如果用户当前正要求装某个插件，
+   不要"补装 → 重启 → 再热装"分两步。先 `pnpm add <用户要的插件>`（或
+   `dsh plugin add`），再一次性安全重启——hot-plugin 和用户插件同时生效，
+   只让用户刷新一次。
 4. 之后 `dsh-web install/remove` 自动走免重启热装。
 
 > 若补装失败（如 pnpm 缺失），**降级为安全重启**——功能依然完整，只是

@@ -80,6 +80,10 @@ After **installing this skill**, say in conversation "**install plugin XX for me
 4. For hot installs, the plugin is active immediately; for upgrades, you just **refresh the page**
 
 > For: users who manage plugins through DSH conversations. This is the skill's **primary scenario** — it's designed for agents.
+>
+> **First use note**: the very first time you hot-install, the agent automatically installs
+> the hot-install component and restarts once (so it can load) — you just refresh that once.
+> After that, every plugin install is **no-restart**.
 
 ### Scenario B: Manual command line — full control
 
