@@ -17,6 +17,9 @@
 #   dsh-web.sh status    查看状态（会话 / 端口 / PID）
 #   dsh-web.sh attach    进入 tmux 会话（手动排查用）
 #   dsh-web.sh report-port  把实际端口写入 last-port.txt 并发系统通知
+#   dsh-web.sh autostart-on  启用开机自启（launchd/systemd，默认关闭，用户自选）
+#   dsh-web.sh autostart-off 关闭开机自启
+#   dsh-web.sh autostart-status  查看自启状态
 #
 # 需要重启的 DSH 变更场景（本脚本的适用范围）：
 #   1. 装/卸/更新插件（bundle 层变更）→ restart
@@ -214,22 +217,28 @@ wait_port() {
   log "等待 ${PORT} 超时（${n}s）"; return 1
 }
 
-# 端口报告：start/restart 完成后，把实际端口写入 last-port.txt 并（可选）发系统通知。
-# 开机自启是无人值守场景，用户看不到终端输出，靠这个文件 + 通知知道端口。
+# 端口报告：start/restart 完成后，把实际端口写入 last-port.txt。
+# 通知策略：默认端口（3080）不通知（用户都知道）；非默认端口（被占用/随机）
+# 才发系统通知告知实际端口——尤其开机自启是无人值守场景，用户需要知道连哪。
 report_port() {
   # 重新探测一次实际端口（wait_port 后端口应已稳定）
   discover_port >/dev/null 2>&1 || true
   local portfile="${LOG_DIR}/last-port.txt"
   printf '%s\n' "${PORT}" > "${portfile}"
   log "实际端口已记录: ${portfile} → ${PORT}"
+  # 默认端口不通知；仅非默认端口通知
+  if [ "${PORT}" = "${DSH_DEFAULT_PORT:-3080}" ]; then
+    log "端口为默认值（${PORT}），跳过通知"
+    return 0
+  fi
   # macOS 通知中心（osascript）；Linux 用 notify-send（存在时）
-  local msg="dsh web 已就绪 → http://127.0.0.1:${PORT}"
+  local msg="dsh web 端口 ${PORT}（非默认）→ http://127.0.0.1:${PORT}"
   if command -v osascript >/dev/null 2>&1; then
     osascript -e "display notification \"${msg}\" with title \"dsh-web-restart\"" >/dev/null 2>&1 || true
-    log "已发送 macOS 通知（端口 ${PORT}）"
+    log "已发送 macOS 通知（非默认端口 ${PORT}）"
   elif command -v notify-send >/dev/null 2>&1; then
     notify-send "dsh-web-restart" "${msg}" >/dev/null 2>&1 || true
-    log "已发送系统通知（端口 ${PORT}）"
+    log "已发送系统通知（非默认端口 ${PORT}）"
   fi
 }
 
@@ -364,6 +373,85 @@ cmd_attach() {
   exec tmux attach -t "${SESSION}"
 }
 
+# 开机自启：默认关闭，用户主动启用。
+# macOS → launchd LaunchAgent；Linux → systemd user unit。
+# 自启只负责「开机后自动 dsh-web start」，端口由 report-port 在非默认时通知。
+AUTOSTART_LABEL="com.dsh-web.restart"
+
+autostart_status() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    [ -f "$HOME/Library/LaunchAgents/${AUTOSTART_LABEL}.plist" ] && echo "已启用（launchd）" || echo "未启用"
+  else
+    [ -f "$HOME/.config/systemd/user/${AUTOSTART_LABEL}.service" ] && echo "已启用（systemd）" || echo "未启用"
+  fi
+}
+
+autostart_on() {
+  local script
+  script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dsh-web.sh"
+  if [ "$(uname -s)" = "Darwin" ]; then
+    local dir="$HOME/Library/LaunchAgents"
+    mkdir -p "${dir}"
+    cat > "${dir}/${AUTOSTART_LABEL}.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>${AUTOSTART_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>${script}</string>
+    <string>start</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><false/>
+</dict>
+</plist>
+EOF
+    launchctl unload "${dir}/${AUTOSTART_LABEL}.plist" 2>/dev/null || true
+    launchctl load "${dir}/${AUTOSTART_LABEL}.plist" 2>&1 && log "开机自启已启用（launchd）：登录时自动 dsh-web start"
+  else
+    local dir="$HOME/.config/systemd/user"
+    mkdir -p "${dir}"
+    cat > "${dir}/${AUTOSTART_LABEL}.service" <<EOF
+[Unit]
+Description=dsh-web-restart autostart
+[Service]
+Type=oneshot
+ExecStart=/bin/bash ${script} start
+RemainAfterExit=yes
+[Install]
+WantedBy=default.target
+EOF
+    systemctl --user daemon-reload 2>/dev/null
+    systemctl --user enable --now "${AUTOSTART_LABEL}.service" 2>&1 && log "开机自启已启用（systemd）"
+  fi
+}
+
+autostart_off() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    local plist="$HOME/Library/LaunchAgents/${AUTOSTART_LABEL}.plist"
+    if [ -f "${plist}" ]; then
+      launchctl unload "${plist}" 2>/dev/null || true
+      rm -f "${plist}"
+      log "开机自启已关闭（launchd）"
+    else
+      log "未启用开机自启"
+    fi
+  else
+    local svc="$HOME/.config/systemd/user/${AUTOSTART_LABEL}.service"
+    if [ -f "${svc}" ]; then
+      systemctl --user disable --now "${AUTOSTART_LABEL}.service" 2>/dev/null || true
+      rm -f "${svc}"
+      systemctl --user daemon-reload 2>/dev/null
+      log "开机自启已关闭（systemd）"
+    else
+      log "未启用开机自启"
+    fi
+  fi
+}
+
 require_tmux
 discover_port
 
@@ -373,6 +461,9 @@ case "${1:-}" in
   reload)  cmd_reload ;;
   upgrade) cmd_upgrade ;;
   report-port) report_port ;;
+  autostart-on) autostart_on ;;
+  autostart-off) autostart_off ;;
+  autostart-status) autostart_status ;;
   stop)    cmd_stop ;;
   status)  cmd_status ;;
   attach)  cmd_attach ;;
