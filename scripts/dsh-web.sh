@@ -165,9 +165,27 @@ resolve_session() {
   return 1
 }
 
-# 创建托管会话（不立即启动 dsh web，避免与旧进程端口冲突）
+# 崩溃自动重启的包装命令（若开启且 run-loop.sh 存在）
+crash_loop_cmd() {
+  local loop_dir
+  loop_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [ "${DSH_CRASH_RESTART:-1}" = "1" ] && [ -f "${loop_dir}/run-loop.sh" ]; then
+    printf '%s' "${loop_dir}/run-loop.sh -- ${DSH_CMD}"
+  else
+    printf '%s' "${DSH_CMD}"
+  fi
+}
+
+# 创建托管会话（不立即启动 dsh web，避免与旧进程端口冲突）。
+# 崩溃自动重启：默认开启（DSH_CRASH_RESTART=1），用 run-loop.sh 循环包装；
+# 连续崩溃 3 次熔断停止，避免坏配置无限空转。设 DSH_CRASH_RESTART=0 关闭。
 create_session() {
-  tmux new-session -d -s "${SESSION}" "exec ${DSH_CMD} 2>&1 | tee ${LOG_DIR}/dsh-web.log"
+  local loop_cmd
+  loop_cmd="$(crash_loop_cmd)"
+  if [[ "${loop_cmd}" == *"run-loop.sh"* ]]; then
+    log "崩溃自动重启已开启（run-loop，连续 3 次熔断）"
+  fi
+  tmux new-session -d -s "${SESSION}" "exec ${loop_cmd} 2>&1 | tee ${LOG_DIR}/dsh-web.log"
 }
 
 # 自动接管：检测到「无 tmux 会话 + 端口已有 dsh web」时，
@@ -181,7 +199,7 @@ migrate_into_tmux() {
   log "检测到未被托管的 dsh web（PID ${pid}，端口 ${PORT}），正在自动迁入 tmux..."
   create_session
   # 由 tmux server 执行，调用方（agent/终端）被杀也不影响迁移完成
-  tmux run-shell -b "sleep 2; kill -TERM ${pid} 2>/dev/null; sleep 2; tmux send-keys -t ${SESSION} C-c; sleep 1; tmux send-keys -t ${SESSION} '${DSH_CMD}' Enter; echo \"dsh-web migrated \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
+  tmux run-shell -b "sleep 2; kill -TERM ${pid} 2>/dev/null; sleep 2; tmux send-keys -t ${SESSION} C-c; sleep 1; tmux send-keys -t ${SESSION} '$(crash_loop_cmd)' Enter; echo \"dsh-web migrated \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
   log "已排定迁移：旧进程停止后 dsh web 将在 tmux 会话 ${SESSION} 中重启（5-8 秒）"
   return 0
 }
@@ -277,7 +295,7 @@ cmd_restart() {
   # - 调用方（agent 会话 / 终端）即使被杀，tmux server 仍会完成 C-c 与重新启动。
   # - 不要在括号内用 $SESSION 外层展开出问题：tmux run-shell 以 server 环境执行。
   log "由 tmux server 排定自动重启（约 5-8 秒完成，页面会短暂断开）"
-  tmux run-shell -b "sleep 3; tmux send-keys -t ${SESSION} C-c; sleep 2; tmux send-keys -t ${SESSION} '${DSH_CMD}' Enter; echo \"dsh-web restarted \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
+  tmux run-shell -b "sleep 3; tmux send-keys -t ${SESSION} C-c; sleep 2; tmux send-keys -t ${SESSION} '$(crash_loop_cmd)' Enter; echo \"dsh-web restarted \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
   # 延迟探测重启后的实际端口（等 6 秒新进程接管），写入 last-port.txt 并通知
   ( sleep 6; "${BASH_SOURCE[0]}" report-port ) >/dev/null 2>&1 &
   log "已排定；请稍后刷新 http://127.0.0.1:${PORT}"
