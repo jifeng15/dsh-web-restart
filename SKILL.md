@@ -142,3 +142,6 @@ bash <skill_dir>/scripts/dsh-web.sh attach   # tmux attach 进去看实时日志
 4. **会话名不一致** → `tmux send-keys -t <错误名字>` 找不到会话；统一用 `dsh-web`。
 5. **GitHub tarball URL 装插件** → pnpm 锁文件缺 integrity 字段，后续安装全失败；
    用 `github:owner/repo#ref` git spec 代替。
+6. **npm 12 升级时 install-scripts 被拦截** → `upgrade` 时若遇到原生模块（如
+   node-pty）报错，按 npm 提示执行 `npm install -g --allow-scripts=...` 或
+   `npm config set allow-scripts=... --location=user` 放行一次；dsh 本体升级通常不受影响。
