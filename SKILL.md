@@ -61,15 +61,24 @@ tmux run-shell -b "sleep 3; tmux send-keys -t dsh-web C-c; sleep 2; tmux send-ke
 
 ## 操作步骤
 
-### 首次托管（dsh web 还没跑在 tmux 里）
+### 首次使用（dsh web 还没托管进 tmux）— 全自动，无需手动 tmux
+
+直接跑 `start` 或 `restart` 即可，脚本会自动检测三种情况并处理：
+
+1. **dsh web 正在普通终端运行**（端口有监听但无 tmux 会话）→ 自动执行「迁入 tmux」：
+   由 tmux server 延迟执行「停旧进程 → 在托管会话里拉起」，用户无需手动
+   `tmux new -s dsh-web "dsh web"`。
+2. **完全没有 dsh web 在跑** → 自动创建 tmux 会话并启动。
+3. **已在 tmux 托管** → 正常重启。
 
 ```bash
-# 方式一：用配套脚本
-bash <skill_dir>/scripts/dsh-web.sh start
-
-# 方式二：手动一行
-tmux new -s dsh-web "dsh web"
+bash <skill_dir>/scripts/dsh-web.sh start     # 启动/自动接管
+bash <skill_dir>/scripts/dsh-web.sh restart   # 重启/自动接管（agent 装完插件后推荐）
 ```
+
+> 也就是说：**别人拿到 skill 后不需要先手动跑任何 tmux 命令**，
+> `start` / `restart` 会自己完成「无 tmux 就装、没托管就接管、托管了就重启」。
+> （手动 `tmux new -s dsh-web "dsh web"` 仍是可用的备选方式，但不是必需。）
 
 ### 装完插件后自动重启（agent 推荐调用）
 
