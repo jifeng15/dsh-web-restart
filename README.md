@@ -41,7 +41,7 @@ Every time, I had to **leave the conversation, go to the command line, re-type `
 - ❌ **Manual**: even when an agent installed the plugin in conversation, I still had to open a terminal
 - ❌ **Fragile**: killing the process directly also kills the running agent session ("many rounds never finished")
 
-**This skill syncs "hot reload" and "hot restart"** — things that DSH already hot-reloads (skills, AGENTS.md, settings) keep hot-reloading; things that **must restart are restarted safely and automatically by the agent**. dsh web becomes truly hot-loadable: install a plugin in conversation, refresh once, and see the effect — **no more manual restarts**.
+**This skill syncs "hot reload" and "hot restart"** — things that DSH already hot-reloads (skills, AGENTS.md, settings) keep hot-reloading; plugin installs now **hot-apply without a restart**, and everything that genuinely must restart (config edits, dsh upgrade) is restarted **safely and automatically by the agent**. dsh web becomes truly hot-loadable: install a plugin in conversation, it's active immediately — **no more manual restarts**.
 
 ## Quick Start
 
@@ -76,23 +76,34 @@ After **installing this skill**, say in conversation "**install plugin XX for me
 
 1. Load this skill automatically
 2. Install the plugin / upgrade dsh
-3. **Automatically call** `dsh-web restart` (agent calls the script directly — you never touch the command line)
-4. You just **refresh the page** — the new plugin/version takes effect immediately
+3. **Automatically call** `dsh-web install` for plugins (hot install, **no restart**) or `dsh-web upgrade` for dsh itself — the agent calls the script directly, you never touch the command line
+4. For hot installs, the plugin is active immediately; for upgrades, you just **refresh the page**
 
 > For: users who manage plugins through DSH conversations. This is the skill's **primary scenario** — it's designed for agents.
 
 ### Scenario B: Manual command line — full control
 
-If you prefer the terminal (e.g. `dsh plugin add` directly, without conversation), **run once after installing a plugin**:
+If you prefer the terminal, install/remove plugins with the **hot** commands (no restart), and use `restart` for everything else:
 
 ```bash
-dsh-web restart    # unified: after installing/removing/updating plugins, editing profile config, or upgrading dsh
-dsh-web status     # check status anytime
+dsh-web install <spec>   # Install plugin: hot install (no restart) if available, else safe restart
+dsh-web remove <pkg>     # Remove plugin: hot uninstall if available, else safe restart
+dsh-web restart    # Fallback/other: safe restart after config edits, dsh upgrade, or when hot apply is unavailable
+dsh-web session    # Report the resolved tmux session (auto-discovered)
+dsh-web status     # Check status anytime
 ```
 
-> **One command covers all scenarios**: whether you installed a plugin, edited `cordis.patch.yml`, or upgraded dsh — it's all the same action: safely restart dsh web. So you only need to remember `dsh-web restart`.
+> **Hot first, safe restart as fallback**: `install/remove` try the bundled
+> dsh-web-hot (no restart, PID unchanged). If hot apply is unavailable (plugin not
+> loaded, module-level code update, or the change can't be hot-applied), they fall
+> back to a safe restart automatically. `restart` remains the unified command for
+> config edits, dsh upgrade, and migration.
 >
-> **Why the "extra step" is unavoidable**: the skill's "auto-restart" trigger is the **agent** — when you install via conversation, the agent is present and auto-invokes it; but when you install from your own terminal, no agent is involved, so you must run it manually once. **This one-time step is worth it**: it migrates dsh web into tmux hosting, and after that everything (conversation-driven) is fully automatic.
+> **Why the "extra step" is unavoidable**: the skill's automation trigger is the
+> **agent** — when you install via conversation, the agent is present and auto-invokes
+> it; but when you install from your own terminal, no agent is involved, so you must
+> run it manually once. **This one-time step is worth it**: it migrates dsh web into
+> tmux hosting, and after that everything (conversation-driven) is fully automatic.
 >
 > For: CLI users, script automation, and agent-internal calls. All commands **automatically** handle tmux hosting, port discovery, and session discovery — no preparation needed.
 
