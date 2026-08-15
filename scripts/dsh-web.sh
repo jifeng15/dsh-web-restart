@@ -58,6 +58,53 @@ has_session()  { tmux has-session -t "${SESSION}" 2>/dev/null; }
 # 找出占用端口的进程 PID（未被 tmux 托管的旧 dsh web）
 port_pid() { lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN -t 2>/dev/null | head -1; }
 
+# 判断某 PID 是否属于某 tmux 会话的某个 pane 进程树（用 pgrep 遍历，避免依赖 ps）
+pid_in_session_tree() {
+  local pid="$1" pane_pids="$2" cur children
+  # 从 pane_pids 各 PID 向下 BFS 子进程，看是否覆盖 pid
+  local queue="${pane_pids}"
+  while [ -n "${queue}" ]; do
+    cur="${queue%% *}"
+    queue="${queue#* }"
+    [ -z "${cur}" ] && continue
+    if [ "${cur}" = "${pid}" ]; then return 0; fi
+    children="$(pgrep -P "${cur}" 2>/dev/null | tr '\n' ' ')"
+    queue="${queue} ${children}"
+  done
+  return 1
+}
+
+# 解析目标会话：默认 dsh-web；若不存在，自动发现「托管了 dsh web」的会话。
+# 判定条件（组合启发式，误判率极低）：
+#   ① 端口 ${PORT} 有进程监听（dsh web 一定监听该端口）
+#   ② 某 tmux 会话的 pane 前台命令是 node（dsh web 是 node 进程）
+# 这样别人用任意会话名（如 0 / mysession）托管 dsh web 也能被自动找到。
+resolve_session() {
+  if has_session; then return 0; fi
+  local pid s cmd pane_pids
+  pid="$(port_pid)"
+  [ -z "${pid}" ] && return 1   # 端口无监听，无从发现
+  # 优先精确进程树关联（部分环境可用）
+  for s in $(tmux list-sessions -F '#{session_name}' 2>/dev/null); do
+    pane_pids="$(tmux list-panes -t "${s}" -F '#{pane_pid}' 2>/dev/null | tr '\n' ' ')"
+    if pid_in_session_tree "${pid}" "${pane_pids}"; then
+      log "未找到会话 ${SESSION}，自动使用托管 dsh web 的会话: ${s}"
+      SESSION="${s}"
+      return 0
+    fi
+  done
+  # 兜底启发式：pane 前台是 node + 端口有监听
+  for s in $(tmux list-sessions -F '#{session_name}' 2>/dev/null); do
+    cmd="$(tmux list-panes -t "${s}" -F '#{pane_current_command}' 2>/dev/null | head -1)"
+    if [ "${cmd}" = "node" ]; then
+      log "未找到会话 ${SESSION}，自动使用托管 dsh web 的会话: ${s}（启发式）"
+      SESSION="${s}"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # 创建托管会话（不立即启动 dsh web，避免与旧进程端口冲突）
 create_session() {
   tmux new-session -d -s "${SESSION}" "exec ${DSH_CMD} 2>&1 | tee ${LOG_DIR}/dsh-web.log"
@@ -112,6 +159,7 @@ wait_port() {
 
 cmd_start() {
   mkdir -p "${LOG_DIR}"
+  resolve_session || true   # 找不到 dsh-web 时自动发现托管会话
   if has_session; then
     log "tmux 会话 ${SESSION} 已存在（若 dsh web 未运行，请用 restart）"
   elif migrate_into_tmux; then
@@ -127,6 +175,7 @@ cmd_start() {
 
 cmd_restart() {
   mkdir -p "${LOG_DIR}"
+  resolve_session || true   # 找不到 dsh-web 时自动发现托管会话
   if ! has_session; then
     log "无 tmux 会话 ${SESSION}"
     if migrate_into_tmux; then
@@ -147,6 +196,7 @@ cmd_restart() {
 }
 
 cmd_stop() {
+  resolve_session || true   # 找不到 dsh-web 时自动发现托管会话
   if ! has_session; then
     log "无 tmux 会话 ${SESSION}，无需停止"
     return 0
@@ -162,6 +212,7 @@ cmd_stop() {
 }
 
 cmd_status() {
+  resolve_session || true   # 找不到 dsh-web 时自动发现托管会话
   echo "--- tmux 会话 ---"
   if has_session; then
     tmux list-panes -t "${SESSION}" -F "会话: #{session_name} / pane: #{pane_id} / 前台: #{pane_current_command}"
@@ -180,6 +231,7 @@ cmd_status() {
 }
 
 cmd_attach() {
+  resolve_session || true   # 找不到 dsh-web 时自动发现托管会话
   has_session || die "无会话 ${SESSION}，请先 start"
   exec tmux attach -t "${SESSION}"
 }
