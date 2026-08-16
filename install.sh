@@ -62,7 +62,26 @@ install_bin() {
   cp "${SRC_DIR}/scripts/dsh-web.sh" "${BIN_DIR}/dsh-web"
   chmod +x "${BIN_DIR}/dsh-web"
   echo "==> 命令行工具已安装到 ${BIN_DIR}/dsh-web"
-  echo "    若 ${BIN_DIR} 不在 PATH，请自行加入: export PATH=\"${BIN_DIR}:\$PATH\""
+  # 若 BIN_DIR 不在 PATH：自动写入 shell rc（带标记防重复），避免「命令不存在」
+  if ! printf '%s' ":$PATH:" | grep -q ":${BIN_DIR}:"; then
+    local marker_found=0 rc
+    for rc in "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+      [ -f "${rc}" ] || continue
+      if grep -q "dsh-web-restart: dsh-web" "${rc}" 2>/dev/null; then
+        marker_found=1
+        break
+      fi
+    done
+    if [ "${marker_found}" = "0" ]; then
+      local target_rc="$HOME/.zshrc"
+      [ -f "$HOME/.zshrc" ] || target_rc="$HOME/.bash_profile"
+      printf '\n# dsh-web-restart: dsh-web 命令\nexport PATH="%s:$PATH"\n' "${BIN_DIR}" >> "${target_rc}"
+      echo "==> ${BIN_DIR} 不在 PATH，已自动写入 ${target_rc}（新终端生效）"
+      echo "    当前终端可先执行: export PATH=\"${BIN_DIR}:\$PATH\""
+    else
+      echo "==> ${BIN_DIR} 已在 shell rc 的 PATH 中（新终端生效）"
+    fi
+  fi
 }
 
 ensure_tmux() {

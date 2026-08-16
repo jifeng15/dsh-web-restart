@@ -98,6 +98,11 @@ agent 会自动完成安装并加载本 skill（skill 是热加载的，装完�
 npx -y skills add https://github.com/jifeng15/dsh-web-restart -g -y -a universal --copy
 ```
 
+> `npx skills add` 只装 **skill 文件**（agent 用 skill 内的脚本路径，不需要命令）。
+> 想要终端里能用 **`dsh-web` 命令**，再执行一次：
+> `bash ~/.agents/skills/dsh-web-restart/install.sh --bin-only`
+> （装到 `~/bin/dsh-web` 并自动把 `~/bin` 加进 shell PATH）。
+
 **③ clone 手动安装**——想先看源码/自己维护时：
 
 ```bash

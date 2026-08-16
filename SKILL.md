@@ -9,7 +9,7 @@ description: >
   removing plugins, after editing profile config (cordis.patch.yml), after upgrading
   the dsh package, when dsh web needs to run persistently without a terminal, or when
   dsh web is down and needs to be brought back up inside tmux.
-version: 1.1.4
+version: 1.1.5
 license: MIT
 metadata:
   dsh:
@@ -115,6 +115,11 @@ agent 应主动补装：
 
 > 若补装失败（如 pnpm 缺失），**降级为安全重启**——功能依然完整，只是
 > 装插件要走 `restart` 而不是免重启。不要因此阻塞用户的插件安装请求。
+
+> **`dsh-web` 命令缺失时补装**：本 skill 内部一律用 `<skill_dir>/scripts/dsh-web.sh`
+> 绝对路径，不依赖 PATH 命令；但若用户想在终端直接用 `dsh-web xxx`（如
+> `dsh-web session`），需要 `install.sh --bin-only` 装命令（会自动把 bin 目录
+> 加进 PATH）。发现用户 `command -v dsh-web` 为空时，可代为执行补装。
 
 ### 装完插件后：优先热装（免重启），失败才重启
 

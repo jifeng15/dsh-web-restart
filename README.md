@@ -110,6 +110,11 @@ The agent installs and loads the skill automatically (skills are hot-loaded — 
 npx -y skills add https://github.com/jifeng15/dsh-web-restart -g -y -a universal --copy
 ```
 
+> `npx skills add` installs the **skill files** only (agents use the skill's
+> script path — no command needed). To get the **`dsh-web` command** in your
+> terminal, run once: `bash ~/.agents/skills/dsh-web-restart/install.sh --bin-only`
+> (it installs to `~/bin/dsh-web` and auto-adds `~/bin` to your shell PATH).
+
 **③ Clone & manual install** — if you want to inspect the source first:
 
 ```bash
