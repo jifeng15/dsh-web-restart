@@ -116,10 +116,13 @@ dsh-web status     # Check status anytime
 dsh-web install <spec>   # ★ Install plugin: hot install (no restart) if available, else safe restart
 dsh-web remove <pkg>     # ★ Remove plugin: hot uninstall if available, else safe restart (refuses CLI-managed — use `dsh plugin --profile web remove`)
 dsh-web restart    # ★ Fallback/other: unified safe restart after plugin changes, config edits, or dsh upgrade
+dsh-web reload     # Apply profile-config edits (cordis.patch.yml) via restart (= restart)
+dsh-web upgrade    # Upgrade the dsh package itself, then auto-restart
 dsh-web start      # Start / auto-takeover (create session if none, migrate into tmux if unmanaged)
 dsh-web stop       # Stop (Ctrl-C; tmux hosting stays, `restart` brings it back)
 dsh-web quit       # Quit fully: stop + close the tmux hosting session + clean up (nothing in the background)
 dsh-web status     # Check session/port/PID/logs
+dsh-web session    # Report the resolved tmux session (auto-discovered, never assumes `dsh-web`)
 dsh-web attach     # Enter tmux for troubleshooting
 dsh-web autostart-on    # Enable autostart at login (default OFF, user opt-in; launchd/systemd)
 dsh-web autostart-off   # Disable autostart
@@ -130,6 +133,7 @@ dsh-web watchdog-status # Check watchdog status
 dsh-web repair       # Fix config: same-file duplicate ids, ghost bundles, cross-source duplicates (auto-backup first)
 dsh-web health-check # Check port + config tree — is it a process or a config problem?
 dsh-web preflight    # Boot self-check (auto-run by start/restart): clear cross-source duplicates
+# internal: report-port (write actual port to last-port.txt + notify non-default), watchdog-tick (launchd calls)
 ```
 
 > **Hot install first, safe restart as fallback**: `dsh-web install/remove` try the

@@ -115,6 +115,8 @@ dsh-web status           # 随时查看状态
 dsh-web install <spec>   # ★ 装插件：热装优先（免重启），失败回退安全重启
 dsh-web remove <pkg>     # ★ 卸插件：热卸优先（免重启），失败回退安全重启（拒绝 CLI 管理的插件——请用 `dsh plugin --profile web remove`）
 dsh-web restart    # ★ 兜底/其他：装插件后、改配置、升级本体等场景统一安全重启
+dsh-web reload     # 改完 profile 配置（cordis.patch.yml）后重启生效（= restart）
+dsh-web upgrade    # 升级 dsh 本体并自动重启
 dsh-web start      # 启动/自动接管（无会话则创建，未托管则迁入 tmux）
 dsh-web stop       # 停止（Ctrl-C；tmux 托管保留，`restart` 可快速恢复）
 dsh-web quit       # 彻底退出：停止 + 关闭托管会话 + 清理痕迹（不再挂后台）
@@ -130,6 +132,7 @@ dsh-web watchdog-status # 查看看门狗状态
 dsh-web repair       # 修复配置：同文件重复 id / ghost bundle / 跨来源重复（改前自动备份）
 dsh-web health-check # 检查端口 + 配置树——是进程问题还是配置问题？
 dsh-web preflight    # boot 前自检（start/restart 自动执行）：清跨来源重复
+# 内部命令：report-port（写实际端口到 last-port.txt + 非默认端口通知）、watchdog-tick（launchd 调用）
 ```
 
 > **热装优先，重启兜底**：`dsh-web install/remove` 先走内置 dsh-web-hot 热装——
