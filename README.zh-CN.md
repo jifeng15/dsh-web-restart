@@ -6,11 +6,32 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.0-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.2-4d6bfe)
 
 **简体中文** | [English](README.md)
 
 ## 更新记录
+
+### v2.0.2（跨来源单源加固）
+
+- 🛡️ **跨来源重复检测与自愈**——「duplicate loader entry id」崩溃（同一插件既在
+  `dsh.profile.bundles` 又被热装写进 patch 层）现在会被预防并自动修复：
+  - `dsh-web repair` 新增诊断 0：bundles 声明的 entry id ∩ patch 层行 → 移除
+    patch 层重复行（bundle 侧为权威）并同步 `dsh-web-hot.state.json`。
+  - `dsh-web preflight`（boot 前自检）——`start`/`restart` 拉起前自动执行；
+    外部把已热装插件收编进 bundles（如 `dsh plugin add`）后，下次启动不会再崩。
+  - `dsh-web-hot` 启动自愈——state.json 中记录的热装包若已被
+    `dsh.profile.bundles` 收编 → 自动让位（删 patch 行 + 清 state +
+    include.update 热卸载），覆盖运行期漂移 / HMR 重载。
+- 🩹 补记 v2.0.1 的 `repair` / `health-check` / 自动备份（当时 README 未同步）。
+
+### v2.0.1（repair / health-check / 自动备份）
+
+- 🛠️ `dsh-web repair`：同文件重复 id 去重、ghost bundle 移除、state.json 与
+  patch 层对齐；改配置前自动备份（保留最近 10 份）。
+- 🩺 `dsh-web health-check`：端口 + 配置树（`--dump-config`）双检查——区分
+  「进程问题」还是「配置问题」。
+- 🔒 热装拒绝已在 `dsh.profile.bundles` 中的插件（热装侧防重复挂载）。
 
 ### v2.0.0（热装免重启）
 
@@ -134,11 +155,21 @@ dsh-web attach     # 进入 tmux 排查
 dsh-web autostart-on    # 启用开机自启（默认关闭，用户主动选择；launchd/systemd）
 dsh-web autostart-off   # 关闭开机自启
 dsh-web autostart-status # 查看自启状态
+dsh-web repair       # 修复配置：同文件重复 id / ghost bundle / 跨来源重复（改前自动备份）
+dsh-web health-check # 检查端口 + 配置树——是进程问题还是配置问题？
+dsh-web preflight    # boot 前自检（start/restart 自动执行）：清跨来源重复
 ```
 
 > **热装优先，重启兜底**：`dsh-web install/remove` 先走内置 dsh-web-hot 热装——
 > **免重启**；热装不可用（插件未加载 / 变更无法热应用）时自动回退安全重启。
 > `dsh-web restart` 仍是其他场景（改配置、升级本体、迁移）的统一命令。
+>
+> **每个插件只有一个主人（单源原则）**：插件只从一个来源挂载——要么
+> `dsh plugin --profile web add|remove`（`dsh.profile.bundles` 列表），要么热装
+> （`cordis.patch.yml` patch 层），**不能两边都有**。若同一插件出现在两边（如外部
+> `dsh plugin add` 收编了之前热装的插件），`preflight`（`start`/`restart` 自动
+> 执行）与 `repair` 会自动检测并移除 patch 层重复行——下次启动不会再因
+> `duplicate loader entry id` 崩溃。
 
 > **开机自启是可选功能，默认关闭**——skill 不会自动启用任何自启项。需要开机后 dsh web 自动在 tmux 里起来时，用户主动执行 `dsh-web autostart-on` 即可。
 
@@ -203,6 +234,23 @@ dsh-web.sh restart
   → tmux server 独立执行（即使 agent 被杀也完成）
   → 5-8 秒后 dsh web 重启；用户刷新
 ```
+
+### 单源原则（插件为什么不能双挂载）
+
+`dsh plugin --profile web add`（bundle 列表）与热装（用户 patch 层）都往
+**同一个 loader** 里注入 include 条目，而 entry id 必须全局唯一——同一插件出现在
+两个来源，下次启动就报 `duplicate loader entry id`。本项目强制**每个插件只有一个
+主人**：
+
+- 热装拒绝已在 `dsh.profile.bundles` 中的插件（安装时点守卫）；
+- `preflight`（`start`/`restart` 自动执行）与 `repair` 检测跨来源重复——
+  bundles 声明的 entry id ∩ patch 层行 → 移除 patch 层重复行（bundle 侧为权威）
+  并同步 `dsh-web-hot.state.json`；
+- `dsh-web-hot` 插件启动自愈——覆盖运行期漂移（HMR 重载、手改 state），经
+  `include.update` 热卸载让位。
+
+所以外部 `dsh plugin add` 收编了之前热装的插件时，下次启动前会自动对齐——
+不再需要手动清理。
 
 ### 环境依赖
 

@@ -6,11 +6,37 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.0-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.2-4d6bfe)
 
 **English** | [简体中文](README.zh-CN.md)
 
 ## Changelog
+
+### v2.0.2 (cross-source single-source hardening)
+
+- 🛡️ **Cross-source duplicate detection & self-heal** — the `duplicate loader
+  entry id` crash (same plugin mounted via both `dsh.profile.bundles` and the
+  hot-install patch layer) is now prevented and auto-repaired:
+  - `dsh-web repair` runs a new cross-source check first: entry ids declared by
+    bundles ∩ patch-layer rows → drops the patch-layer duplicates (bundles side
+    is authoritative) and syncs `dsh-web-hot.state.json`.
+  - `dsh-web preflight` (boot self-check) — `start`/`restart` run it before
+    launching, so an external takeover (e.g. `dsh plugin add` adopting a
+    hot-installed plugin) can never crash the next boot.
+  - `dsh-web-hot` startup self-heal — the host plugin drops patch rows for any
+    hot-managed bundle that `dsh.profile.bundles` has since adopted (covers
+    running-process drift / HMR reloads).
+- 🩹 v2.0.1's `repair` / `health-check` / auto config backup are now documented
+  here too (they shipped in v2.0.1 but the README wasn't synced).
+
+### v2.0.1 (repair & health-check)
+
+- 🛠️ `dsh-web repair`: dedup duplicate ids, remove ghost bundles, resync
+  `dsh-web-hot.state.json`; auto-backup before any config change (keeps last 10).
+- 🩺 `dsh-web health-check`: port readiness + config tree (`--dump-config`) —
+  tells you whether it's a process or a config problem.
+- 🔒 Hot install rejects bundles already in `dsh.profile.bundles` (prevents the
+  duplicate loader entry id crash from the hot-install side).
 
 ### v2.0.0 (hot install, no restart)
 
@@ -139,6 +165,9 @@ dsh-web attach     # Enter tmux for troubleshooting
 dsh-web autostart-on    # Enable autostart at login (default OFF, user opt-in; launchd/systemd)
 dsh-web autostart-off   # Disable autostart
 dsh-web autostart-status # Check autostart status
+dsh-web repair       # Fix config: same-file duplicate ids, ghost bundles, cross-source duplicates (auto-backup first)
+dsh-web health-check # Check port + config tree — is it a process or a config problem?
+dsh-web preflight    # Boot self-check (auto-run by start/restart): clear cross-source duplicates
 ```
 
 > **Hot install first, safe restart as fallback**: `dsh-web install/remove` try the
@@ -146,6 +175,14 @@ dsh-web autostart-status # Check autostart status
 > a restart**. If hot apply is unavailable (plugin not loaded, or the change can't be
 > hot-applied), it falls back to a safe restart automatically. `dsh-web restart` remains
 > the unified command for everything else (config edits, dsh upgrade, migration).
+>
+> **One owner per plugin (single-source)**: a plugin is mounted from exactly one
+> source — either `dsh plugin --profile web add|remove` (the `dsh.profile.bundles`
+> list) or hot install (the `cordis.patch.yml` patch layer), never both. If the same
+> plugin ends up in both (e.g. an external `dsh plugin add` adopts a previously
+> hot-installed one), `preflight` (auto-run by `start`/`restart`) and `repair`
+> detect it and drop the patch-layer rows automatically — the next boot can't crash
+> with `duplicate loader entry id`.
 
 > **Autostart is optional and OFF by default** — the skill never enables autostart on its own. Run `dsh-web autostart-on` when you want dsh web to start in tmux after login.
 
@@ -206,6 +243,23 @@ dsh-web.sh restart
   → tmux server executes independently (completes even if agent dies)
   → 5-8s later dsh web restarts; user refreshes
 ```
+
+### Single-source principle (why plugins must not double-mount)
+
+`dsh plugin --profile web add` (the bundle list) and hot install (the user patch
+layer) both feed include entries into the **same loader**, whose entry ids must be
+unique. If the same plugin ends up in both sources, the next boot dies with
+`duplicate loader entry id`. This project enforces **one owner per plugin**:
+
+- hot install refuses bundles already in `dsh.profile.bundles` (install-time guard);
+- `preflight` (auto-run by `start`/`restart`) and `repair` detect cross-source
+  duplicates — entry ids declared by bundles ∩ patch-layer rows — and drop the
+  patch-layer rows (bundles side is authoritative), syncing `dsh-web-hot.state.json`;
+- the `dsh-web-hot` plugin self-heals at startup for running-process drift (HMR
+  reloads, manual state edits), hot-unmounting rows via `include.update`.
+
+So an external `dsh plugin add` that adopts a previously hot-installed plugin is
+auto-reconciled before the next boot — no manual cleanup needed.
 
 ### Environment dependencies
 

@@ -9,7 +9,7 @@ description: >
   removing plugins, after editing profile config (cordis.patch.yml), after upgrading
   the dsh package, when dsh web needs to run persistently without a terminal, or when
   dsh web is down and needs to be brought back up inside tmux.
-version: 1.1.0
+version: 1.1.1
 license: MIT
 metadata:
   dsh:
@@ -145,6 +145,12 @@ bash <skill_dir>/scripts/dsh-web.sh restart
 > 场景明确（改配置 → reload；升级 → upgrade）时用它更精准，但不要把这些
 > 差异抛给用户去记。
 
+> **重启前自动自检（preflight）**：`restart`/`start` 会在拉起新进程前自动执行
+> preflight——若某插件同时存在于 `dsh.profile.bundles` 与 patch 层（如外部
+> `dsh plugin add` 收编了之前热装的插件），会自动移除 patch 层重复行并同步
+> state，防止下次启动 `duplicate loader entry id` 崩溃。已经崩了就用
+> `dsh-web repair` 一条命令自动修（改前自动备份）。
+
 ### 改完 profile 配置后生效（reload）
 
 ```bash
@@ -218,3 +224,7 @@ bash <skill_dir>/scripts/dsh-web.sh attach   # tmux attach 进去看实时日志
 6. **npm 12 升级时 install-scripts 被拦截** → `upgrade` 时若遇到原生模块（如
    node-pty）报错，按 npm 提示执行 `npm install -g --allow-scripts=...` 或
    `npm config set allow-scripts=... --location=user` 放行一次；dsh 本体升级通常不受影响。
+7. **同一插件双挂载（跨来源重复）** → 既在 `dsh.profile.bundles`（`dsh plugin`
+   管理）又被热装写进 cordis.patch.yml → 下次启动 `duplicate loader entry id`
+   崩溃。✅ `start`/`restart` 已自动 preflight 清理；已崩则 `dsh-web repair`
+   一条命令自动修（bundle 侧为权威，patch 层让位）。
