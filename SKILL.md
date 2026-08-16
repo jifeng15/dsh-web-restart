@@ -9,7 +9,7 @@ description: >
   removing plugins, after editing profile config (cordis.patch.yml), after upgrading
   the dsh package, when dsh web needs to run persistently without a terminal, or when
   dsh web is down and needs to be brought back up inside tmux.
-version: 1.1.2
+version: 1.1.3
 license: MIT
 metadata:
   dsh:
@@ -234,3 +234,10 @@ bash <skill_dir>/scripts/dsh-web.sh attach   # tmux attach 进去看实时日志
 8. **`dsh-web remove` 卸载 CLI 管理的插件** → 回退只 `pnpm remove` 不删 bundle
    条目 → ghost bundle（条目在、依赖没了）。✅ 已加单源防护：目标在
    `dsh.profile.bundles` 中会直接拒绝并提示用 `dsh plugin --profile web remove`。
+9. **迁移时新实例抢端口** → `migrate_into_tmux` 原实现先 `create_session`
+   （立即启动 dsh web）再杀旧进程 → EADDRINUSE 反复失败、run-loop 熔断。
+   ✅ 已改为：先建空 tmux 会话 → 停旧进程 → 等端口释放 → preflight → 再拉起。
+10. **「自动接管」是有条件的**：普通终端里的 dsh web 需要**跑一次 `dsh-web
+    start`/`restart`** 才会被迁入 tmux；从不跑脚本直接关终端，进程会随终端
+    退出（SIGHUP）——这是终端行为，不是 bug。想要"任何方式开启都自动托管"
+    需另加系统级看门狗（launchd），见 README 边界。

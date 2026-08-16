@@ -188,7 +188,9 @@ crash_loop_cmd() {
   fi
 }
 
-# 创建托管会话（不立即启动 dsh web，避免与旧进程端口冲突）。
+# 创建托管会话并立即启动 dsh web（仅用于「无旧进程」的全新启动：此时端口空闲，
+# 直接拉起即可）。迁移场景（旧进程占着端口）走 migrate_into_tmux 的空会话 +
+# 延迟拉起，避免 EADDRINUSE 竞态。
 # 崩溃自动重启：默认开启（DSH_CRASH_RESTART=1），用 run-loop.sh 循环包装；
 # 连续崩溃 3 次熔断停止，避免坏配置无限空转。设 DSH_CRASH_RESTART=0 关闭。
 create_session() {
@@ -209,12 +211,15 @@ migrate_into_tmux() {
     return 1  # 端口无监听，无需迁移
   fi
   log "检测到未被托管的 dsh web（PID ${pid}，端口 ${PORT}），正在自动迁入 tmux..."
-  create_session
-  # 由 tmux server 执行，调用方（agent/终端）被杀也不影响迁移完成；
-  # 拉起前先跑 preflight（清跨来源重复），防止新进程起不来。
+  # 先建「空」tmux 会话（不启动 dsh web）：若立即启动，新实例会与旧进程抢端口
+  # （EADDRINUSE），run-loop 会把失败计入 3 次熔断，迁移可能以空转/挂掉收场。
+  # 空会话等旧进程退出、端口释放后再拉起。
+  tmux new-session -d -s "${SESSION}" || return 1
   local self
   self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dsh-web.sh"
-  tmux run-shell -b "sleep 2; kill -TERM ${pid} 2>/dev/null; sleep 2; tmux send-keys -t ${SESSION} C-c; sleep 1; ${self} preflight >/dev/null 2>&1 || true; tmux send-keys -t ${SESSION} '$(crash_loop_cmd)' Enter; echo \"dsh-web migrated \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
+  # 由 tmux server 独立执行：停旧进程 → 等端口释放 → preflight → 在托管会话拉起。
+  # 调用方（agent/终端）被杀也不影响迁移完成。
+  tmux run-shell -b "sleep 2; kill -TERM ${pid} 2>/dev/null; sleep 2; tmux send-keys -t ${SESSION} C-c; sleep 1; for i in \$(seq 1 12); do lsof -nP -iTCP:${PORT} -sTCP:LISTEN -t >/dev/null 2>&1 || break; sleep 1; done; ${self} preflight >/dev/null 2>&1 || true; tmux send-keys -t ${SESSION} '$(crash_loop_cmd)' Enter; echo \"dsh-web migrated \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
   log "已排定迁移：旧进程停止后 dsh web 将在 tmux 会话 ${SESSION} 中重启（5-8 秒）"
   return 0
 }

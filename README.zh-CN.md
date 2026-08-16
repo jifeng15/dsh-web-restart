@@ -6,11 +6,19 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.3-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.4-4d6bfe)
 
 **简体中文** | [English](README.md)
 
 ## 更新记录
+
+### v2.0.4（迁移竞态修复）
+
+- 🔧 `start` 自动接管（普通终端里的 dsh web → tmux）现在**先建空 tmux 会话**，
+  等旧进程停止、端口释放后才在托管会话里拉起。原来新实例立即启动、和旧进程抢
+  端口（EADDRINUSE），失败会被 run-loop 计入 3 次熔断。
+- ✅ 已用假进程 + 无害启动命令端到端实测：空会话 → 旧进程被杀 → 端口释放 →
+  托管会话内启动成功。
 
 ### v2.0.3（remove 单源防护）
 
@@ -141,7 +149,7 @@ dsh-web status           # 随时查看状态
 | 改完 profile 配置（cordis.patch.yml）后 `reload` 生效 | 让 dsh web **不重启进程**就加载插件/配置（bundle 树启动时合成，必须重启进程；刷新页面只是重启后重连，不是加载手段） |
 | `upgrade` 升级 dsh 本体并自动重启 | 重启电脑后自动恢复（需要你重新 `dsh-web start` 一次） |
 | 没装 tmux？**自动帮你装**（macOS/Linux 主流包管理器） | 非 npm/pnpm 安装的 dsh 本体无法自动升级（只提示） |
-| dsh web 跑在普通终端？**自动迁入 tmux** 托管 | skill 增改、AGENTS.md 修改等（这些**本来就是热加载的**，不需要它） |
+| dsh web 跑在普通终端？**自动迁入 tmux** 托管（运行中执行一次 `dsh-web start` 或 `restart` 即触发） | skill 增改、AGENTS.md 修改等（这些**本来就是热加载的**，不需要它） |
 | 会话名不叫 `dsh-web`？**自动找到**实际托管会话 | 崩溃自动重启是独立可选功能（run-loop） |
 | 端口不是 3080？**自动发现**（含 `--port 0` 随机端口） | — |
 | 终端窗口全关，dsh web **照常运行**、随时可重启 | — |

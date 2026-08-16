@@ -6,11 +6,20 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.3-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.4-4d6bfe)
 
 **English** | [简体中文](README.zh-CN.md)
 
 ## Changelog
+
+### v2.0.4 (migration race fix)
+
+- 🔧 `start` auto-takeover (plain-terminal dsh web → tmux) now creates an **empty**
+  tmux session first and launches dsh web only after the old process is stopped and
+  the port is free. Previously the new instance started immediately and fought the
+  old one for the port (`EADDRINUSE`), burning the run-loop's 3-strike breaker.
+- ✅ Verified end-to-end with a dummy process + harmless launch command: empty
+  session → old process killed → port released → dsh web starts inside tmux.
 
 ### v2.0.3 (remove single-source guard)
 
@@ -152,7 +161,7 @@ dsh-web status     # Check status anytime
 | **Auto-restart** dsh web after plugin changes, config edits, or dsh upgrade — **no manual commands** (conversation) | Hot-apply **module code updates** (Node require cache — must restart) |
 | `reload` takes effect after editing profile config (`cordis.patch.yml`) | Auto-recover after reboot (you re-run `dsh-web start` once) |
 | No tmux? **Auto-installs it** (macOS/Linux package managers) | Auto-upgrade non-npm/pnpm dsh installs (only hints) |
-| dsh web running in a plain terminal? **Auto-migrates into tmux** | Skill additions, AGENTS.md edits, etc. (these **already hot-reload**; not needed here) |
+| dsh web running in a plain terminal? **Auto-migrates into tmux** (run `dsh-web start` or `restart` once while it's running) | Skill additions, AGENTS.md edits, etc. (these **already hot-reload**; not needed here) |
 | Session not named `dsh-web`? **Auto-discovers** the hosting session | Crash auto-restart is a separate opt-in (run-loop) |
 | Port not 3080? **Auto-discovers** (incl. `--port 0` random ports) | — |
 | All terminals closed — dsh web **keeps running**, restartable anytime | — |
