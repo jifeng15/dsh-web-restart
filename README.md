@@ -172,11 +172,64 @@ tmux run-shell -b "sleep 3; tmux send-keys -t dsh-web C-c; sleep 2; tmux send-ke
 
 tmux server is an independent daemon — it doesn't depend on dsh web being alive. Even if the caller (agent) dies with dsh web, the restart still completes.
 
+## Architecture & Data Flow (technical)
+
+### Components
+
+| Component | Role |
+|---|---|
+| `scripts/dsh-web.sh` | Main CLI (start/restart/install/remove/upgrade/status/session/autostart-*) |
+| `hot-plugin/` (dsh-web-hot) | Host plugin: hot install/uninstall via `include.update` (no restart) |
+| `scripts/run-loop.sh` | Crash auto-restart loop (3-strike circuit breaker) |
+| `scripts/install-tmux.sh` | Cross-platform tmux auto-install |
+| `install.sh` | One-shot install (skill + CLI + hot-plugin + tmux) |
+
+### Hot install (no restart) data flow
+
+```
+dsh-web.sh install <spec>
+  → POST /dsh-web-hot/install {spec}
+    → pnpm add <spec> (profile dir, official registry)
+    → read bundle's dsh.bundle.patch → patch rows
+    → write cordis.patch.yml (user patch layer, persistent)
+    → include.update (hot apply, PID unchanged)
+    → record dsh-web-hot.state.json
+  → {"ok": true}
+```
+
+### Safe restart data flow
+
+```
+dsh-web.sh restart
+  → resolve_session (discover actual session, e.g. "0")
+  → tmux run-shell -b "sleep 3; C-c; sleep 2; 'dsh web'"
+  → tmux server executes independently (completes even if agent dies)
+  → 5-8s later dsh web restarts; user refreshes
+```
+
+### Environment dependencies
+
+| Dep | Use | If missing |
+|---|---|---|
+| tmux | hosting + independent restart | auto-installed |
+| pnpm | plugin install (via dsh-web-hot) | hot install degrades to safe restart |
+| dsh CLI | install.sh hot-plugin install | hot-plugin skipped |
+| curl/lsof/ps/pgrep | probing | — |
+
 ## Pitfalls We Hit
 
 1. Synchronous restart = kills the host process = command interrupted → use `tmux run-shell -b`
 2. `nohup ... &` background tasks get cleaned up when the caller's turn ends → use tmux server
 3. GitHub tarball URL plugin installs leave pnpm lockfile missing `integrity` → use `github:owner/repo#ref`
+
+## Docs (public vs internal)
+
+**Public (on GitHub)**: `README.md` / `README.zh-CN.md` (user docs), `SKILL.md` (agent-facing skill).
+
+**Internal (local-only, not pushed — per global convention)**:
+`AGENTS.md` (project rules), `SPECS.md` (task spec), `HANDOFF.md` (current state),
+`VERSIONS.md` (version history). These live in the repo working tree for local
+development but are excluded from git (see `.gitignore`).
 
 ## License
 

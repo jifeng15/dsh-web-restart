@@ -1,6 +1,10 @@
 node_modules/
-# 内部工作文档（本地保留，不上 GitHub）
+# 内部工作文档（本地保留，不上 GitHub）—— 公开仓库不提交
 AGENTS.md
+SPECS.md
+HANDOFF.md
+VERSIONS.md
+# 旧小写名（防止误传历史遗留）
 specs.md
 handoff.md
 version.md

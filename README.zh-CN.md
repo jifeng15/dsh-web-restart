@@ -169,11 +169,63 @@ tmux run-shell -b "sleep 3; tmux send-keys -t dsh-web C-c; sleep 2; tmux send-ke
 
 tmux server 是独立守护进程，不依赖 dsh web 存活——即使调用方（agent）随 dsh web 被杀，重启依然完成。
 
+## 架构与数据流（技术细节）
+
+### 组件
+
+| 组件 | 职责 |
+|---|---|
+| `scripts/dsh-web.sh` | 主命令行（start/restart/install/remove/upgrade/status/session/autostart-*） |
+| `hot-plugin/`（dsh-web-hot） | 宿主插件：`include.update` 热装/热卸（免重启） |
+| `scripts/run-loop.sh` | 崩溃自动重启循环（3 次熔断） |
+| `scripts/install-tmux.sh` | 跨平台 tmux 自动安装 |
+| `install.sh` | 一键安装（skill + 命令行 + hot-plugin + tmux） |
+
+### 热装（免重启）数据流
+
+```
+dsh-web.sh install <spec>
+  → POST /dsh-web-hot/install {spec}
+    → pnpm add <spec>（profile 目录，官方 registry）
+    → 读 bundle 的 dsh.bundle.patch → patch 行
+    → 写 cordis.patch.yml（用户补丁层，持久化）
+    → include.update（热应用，PID 不变）
+    → 记录 dsh-web-hot.state.json
+  → {"ok": true}
+```
+
+### 安全重启数据流
+
+```
+dsh-web.sh restart
+  → resolve_session（发现实际会话，如 "0"）
+  → tmux run-shell -b "sleep 3; C-c; sleep 2; 'dsh web'"
+  → tmux server 独立执行（即使 agent 被杀也完成）
+  → 5-8 秒后 dsh web 重启；用户刷新
+```
+
+### 环境依赖
+
+| 依赖 | 用途 | 缺失时 |
+|---|---|---|
+| tmux | 托管 + 独立重启 | 自动安装 |
+| pnpm | 插件安装（经 dsh-web-hot） | 热装降级为安全重启 |
+| dsh CLI | install.sh 装 hot-plugin | 跳过 hot-plugin |
+| curl/lsof/ps/pgrep | 探测 | — |
+
 ## 踩过的坑
 
 1. 同步重启 = 杀宿主进程 = 命令中断 → 用 `tmux run-shell -b`
 2. `nohup ... &` 排定后台任务会被调用方回合清理 → 用 tmux server
 3. GitHub tarball URL 装插件会让 pnpm 锁文件缺 integrity → 用 `github:owner/repo#ref`
+
+## 文档（公开 vs 内部）
+
+**公开（GitHub 上）**：`README.md` / `README.zh-CN.md`（用户文档）、`SKILL.md`（agent 用 skill）。
+
+**内部（仅本地，不上传——遵循全局约定）**：`AGENTS.md`（项目规则）、
+`SPECS.md`（任务规格）、`HANDOFF.md`（当前状态）、`VERSIONS.md`（版本历史）。
+这些文件在本地工作树用于开发，但被 `.gitignore` 排除、不随仓库公开。
 
 ## License
 
