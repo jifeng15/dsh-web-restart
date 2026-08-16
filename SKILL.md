@@ -9,7 +9,7 @@ description: >
   removing plugins, after editing profile config (cordis.patch.yml), after upgrading
   the dsh package, when dsh web needs to run persistently without a terminal, or when
   dsh web is down and needs to be brought back up inside tmux.
-version: 1.1.3
+version: 1.1.4
 license: MIT
 metadata:
   dsh:
@@ -180,6 +180,18 @@ bash <skill_dir>/scripts/dsh-web.sh stop     # Ctrl-C 停止
 bash <skill_dir>/scripts/dsh-web.sh attach   # tmux attach 进去看实时日志
 ```
 
+### 看门狗：任何方式启动都自动托管（可选，默认关）
+
+```bash
+bash <skill_dir>/scripts/dsh-web.sh watchdog-on     # 启用：launchd 每 30s 检测未托管的 dsh web 并自动迁入 tmux
+bash <skill_dir>/scripts/dsh-web.sh watchdog-status # 状态
+bash <skill_dir>/scripts/dsh-web.sh watchdog-off    # 关闭
+```
+
+看门狗只迁移**运行中**的 web，绝不主动启动停止的 web。启用后，普通终端里直接
+`dsh web` 起的实例也会在 30s 内被自动迁入 tmux——关终端不再影响。仅 macOS
+（Linux systemd timer 后续支持）。
+
 ## 本工具是「重启服务」，不是「热重载」
 
 必须先说清这个定位，避免误用：
@@ -237,7 +249,7 @@ bash <skill_dir>/scripts/dsh-web.sh attach   # tmux attach 进去看实时日志
 9. **迁移时新实例抢端口** → `migrate_into_tmux` 原实现先 `create_session`
    （立即启动 dsh web）再杀旧进程 → EADDRINUSE 反复失败、run-loop 熔断。
    ✅ 已改为：先建空 tmux 会话 → 停旧进程 → 等端口释放 → preflight → 再拉起。
-10. **「自动接管」是有条件的**：普通终端里的 dsh web 需要**跑一次 `dsh-web
-    start`/`restart`** 才会被迁入 tmux；从不跑脚本直接关终端，进程会随终端
-    退出（SIGHUP）——这是终端行为，不是 bug。想要"任何方式开启都自动托管"
-    需另加系统级看门狗（launchd），见 README 边界。
+10. **「自动接管」默认是有条件的**：普通终端里的 dsh web 需要跑一次 `dsh-web
+    start`/`restart` 才会被迁入 tmux；从不跑脚本直接关终端，进程会随终端退出
+    （SIGHUP）。✅ 可选 `dsh-web watchdog-on` 启用 launchd 看门狗后即「真·自动」：
+    任何方式启动都会在 30s 内被迁入 tmux，关终端不影响。

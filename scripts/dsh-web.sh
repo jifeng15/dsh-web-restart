@@ -20,6 +20,9 @@
 #   dsh-web.sh health-check  检查端口与配置树（区分进程问题/配置问题）
 #   dsh-web.sh repair        修复配置（同文件重复 id / ghost bundle / 跨来源重复）
 #   dsh-web.sh preflight     boot 前自检（start/restart 自动执行；清跨来源重复）
+#   dsh-web.sh watchdog-on   启用 launchd 看门狗（每 30s 检测未托管的 dsh web 并自动迁入 tmux）
+#   dsh-web.sh watchdog-off  关闭看门狗
+#   dsh-web.sh watchdog-status  查看看门狗状态
 #   dsh-web.sh autostart-on  启用开机自启（launchd/systemd，默认关闭，用户自选）
 #   dsh-web.sh autostart-off 关闭开机自启
 #   dsh-web.sh autostart-status  查看自启状态
@@ -836,6 +839,81 @@ cmd_attach() {
 # 自启只负责「开机后自动 dsh-web start」，端口由 report-port 在非默认时通知。
 AUTOSTART_LABEL="com.dsh-web.restart"
 
+# launchd 看门狗：默认关闭，用户主动启用。每 30s 检测一次——
+# 端口有 dsh web 但不在 tmux 托管 → 自动迁入 tmux（任何方式开启的 dsh web，
+# 关终端都不影响）。只迁移运行中的 web，绝不主动启动停止的 web。
+WATCHDOG_LABEL="com.dsh-web.watchdog"
+
+watchdog_status() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    if [ -f "$HOME/Library/LaunchAgents/${WATCHDOG_LABEL}.plist" ]; then
+      echo "已启用（launchd，每 30s 检测未托管的 dsh web 并自动迁入 tmux）"
+    else
+      echo "未启用"
+    fi
+  else
+    echo "看门狗当前仅支持 macOS（launchd）；Linux（systemd timer）后续版本支持"
+  fi
+}
+
+watchdog_on() {
+  [ "$(uname -s)" = "Darwin" ] || die "看门狗当前仅支持 macOS（launchd）"
+  require_tmux
+  local script dir plist
+  script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dsh-web.sh"
+  dir="$HOME/Library/LaunchAgents"
+  mkdir -p "${dir}"
+  plist="${dir}/${WATCHDOG_LABEL}.plist"
+  cat > "${plist}" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>${WATCHDOG_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>${script}</string>
+    <string>watchdog-tick</string>
+  </array>
+  <key>StartInterval</key><integer>30</integer>
+  <key>RunAtLoad</key><true/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>${HOME}</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>StandardOutPath</key><string>${LOG_DIR}/watchdog.log</string>
+  <key>StandardErrorPath</key><string>${LOG_DIR}/watchdog.log</string>
+</dict>
+</plist>
+EOF
+  launchctl unload "${plist}" 2>/dev/null || true
+  launchctl load "${plist}" 2>&1 && log "看门狗已启用（launchd，每 30s 检测未托管的 dsh web 并自动迁入 tmux）"
+}
+
+watchdog_off() {
+  local plist="$HOME/Library/LaunchAgents/${WATCHDOG_LABEL}.plist"
+  if [ -f "${plist}" ]; then
+    launchctl unload "${plist}" 2>/dev/null || true
+    rm -f "${plist}"
+    log "看门狗已关闭"
+  else
+    log "看门狗未启用"
+  fi
+}
+
+# 看门狗单次检测（由 launchd 每 30s 调用；也可手动跑）。
+# 端口有 dsh web 但不在 tmux 托管 → 自动迁入 tmux。绝不主动启动停止的 web。
+cmd_watchdog_tick() {
+  if ! is_listening; then return 0; fi          # web 没在跑 → 无事可做
+  if resolve_session >/dev/null 2>&1; then return 0; fi  # 已在 tmux 托管 → 无事可做
+  log "watchdog：检测到未托管的 dsh web（端口 ${PORT}），自动迁入 tmux..."
+  migrate_into_tmux
+  return 0
+}
+
+
 autostart_status() {
   if [ "$(uname -s)" = "Darwin" ]; then
     [ -f "$HOME/Library/LaunchAgents/${AUTOSTART_LABEL}.plist" ] && echo "已启用（launchd）" || echo "未启用"
@@ -923,6 +1001,10 @@ case "${1:-}" in
   repair)  cmd_repair ;;
   health-check) cmd_health_check ;;
   preflight) cmd_preflight ;;
+  watchdog-on) watchdog_on ;;
+  watchdog-off) watchdog_off ;;
+  watchdog-status) watchdog_status ;;
+  watchdog-tick) cmd_watchdog_tick ;;
   report-port) report_port ;;
   autostart-on) autostart_on ;;
   autostart-off) autostart_off ;;
@@ -931,5 +1013,5 @@ case "${1:-}" in
   status)  cmd_status ;;
   session) cmd_session ;;
   attach)  cmd_attach ;;
-  *) die "用法: dsh-web.sh {start|restart|install|remove|reload|upgrade|repair|health-check|preflight|stop|status|session|attach}" ;;
+  *) die "用法: dsh-web.sh {start|restart|install|remove|reload|upgrade|repair|health-check|preflight|watchdog-on|watchdog-off|watchdog-status|stop|status|session|attach}" ;;
 esac

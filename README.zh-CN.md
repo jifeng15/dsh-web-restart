@@ -6,11 +6,19 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.4-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.5-4d6bfe)
 
 **简体中文** | [English](README.md)
 
 ## 更新记录
+
+### v2.0.5（launchd 看门狗 · 真·自动接管）
+
+- 🐕 **`dsh-web watchdog-on`**：启用 launchd 看门狗（默认关闭，用户主动开启）。
+  每 30s 检测一次——端口有 dsh web 但**不在 tmux 托管**（如普通终端里起的）→
+  自动迁入 tmux。任何方式启动的 dsh web，关终端都不再影响。看门狗**只迁移
+  运行中的 web，绝不主动启动停止的 web**；用 `watchdog-status` / `watchdog-off`
+  管理。
 
 ### v2.0.4（迁移竞态修复）
 
@@ -149,7 +157,7 @@ dsh-web status           # 随时查看状态
 | 改完 profile 配置（cordis.patch.yml）后 `reload` 生效 | 让 dsh web **不重启进程**就加载插件/配置（bundle 树启动时合成，必须重启进程；刷新页面只是重启后重连，不是加载手段） |
 | `upgrade` 升级 dsh 本体并自动重启 | 重启电脑后自动恢复（需要你重新 `dsh-web start` 一次） |
 | 没装 tmux？**自动帮你装**（macOS/Linux 主流包管理器） | 非 npm/pnpm 安装的 dsh 本体无法自动升级（只提示） |
-| dsh web 跑在普通终端？**自动迁入 tmux** 托管（运行中执行一次 `dsh-web start` 或 `restart` 即触发） | skill 增改、AGENTS.md 修改等（这些**本来就是热加载的**，不需要它） |
+| dsh web 跑在普通终端？**自动迁入 tmux** 托管（运行中执行一次 `dsh-web start`/`restart`；或启用看门狗后完全自动） | skill 增改、AGENTS.md 修改等（这些**本来就是热加载的**，不需要它） |
 | 会话名不叫 `dsh-web`？**自动找到**实际托管会话 | 崩溃自动重启是独立可选功能（run-loop） |
 | 端口不是 3080？**自动发现**（含 `--port 0` 随机端口） | — |
 | 终端窗口全关，dsh web **照常运行**、随时可重启 | — |
@@ -170,6 +178,9 @@ dsh-web attach     # 进入 tmux 排查
 dsh-web autostart-on    # 启用开机自启（默认关闭，用户主动选择；launchd/systemd）
 dsh-web autostart-off   # 关闭开机自启
 dsh-web autostart-status # 查看自启状态
+dsh-web watchdog-on     # 启用 launchd 看门狗：每 30s 把未托管的 dsh web 自动迁入 tmux（默认关闭）
+dsh-web watchdog-off    # 关闭看门狗
+dsh-web watchdog-status # 查看看门狗状态
 dsh-web repair       # 修复配置：同文件重复 id / ghost bundle / 跨来源重复（改前自动备份）
 dsh-web health-check # 检查端口 + 配置树——是进程问题还是配置问题？
 dsh-web preflight    # boot 前自检（start/restart 自动执行）：清跨来源重复
@@ -192,6 +203,14 @@ dsh-web preflight    # boot 前自检（start/restart 自动执行）：清跨�
 > **端口通知策略**：`start`/`restart` 后实际端口写入 `~/.dsh/logs/last-port.txt`。
 > 端口为**默认值（3080）时不发通知**（大家都知道）；**非默认端口**（被占用/随机）
 > 才发系统通知告知实际端口——尤其自启是无人值守场景，用户需要知道连哪里。
+
+### 看门狗：真·自动接管（可选，默认关闭）
+
+`dsh-web watchdog-on` 安装 launchd LaunchAgent，每 30s 检测一次：如果 dsh web
+正在监听但**不在 tmux 托管**（如你在普通终端里起的），就自动把它迁入 tmux——
+之后**不管你怎么启动的，关终端都不会杀掉 dsh web**。看门狗只迁移**运行中**的
+web，绝不主动启动停止的 web。`dsh-web watchdog-off` 关闭。当前仅 macOS
+（Linux systemd timer 后续支持）。
 
 ## 约定与边界
 

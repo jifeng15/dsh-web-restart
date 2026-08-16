@@ -6,11 +6,20 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.4-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.5-4d6bfe)
 
 **English** | [简体中文](README.zh-CN.md)
 
 ## Changelog
+
+### v2.0.5 (launchd watchdog — fully automatic takeover)
+
+- 🐕 **`dsh-web watchdog-on`**: a launchd LaunchAgent checks every 30 s — if dsh
+  web is listening but **not** hosted in tmux (e.g. you started it in a plain
+  terminal), it auto-migrates it into tmux. So no matter how you start dsh web,
+  closing the terminal no longer kills it. Opt-in (default OFF), managed with
+  `watchdog-status` / `watchdog-off`. The watchdog only migrates a *running* web —
+  it never starts a stopped one.
 
 ### v2.0.4 (migration race fix)
 
@@ -161,7 +170,7 @@ dsh-web status     # Check status anytime
 | **Auto-restart** dsh web after plugin changes, config edits, or dsh upgrade — **no manual commands** (conversation) | Hot-apply **module code updates** (Node require cache — must restart) |
 | `reload` takes effect after editing profile config (`cordis.patch.yml`) | Auto-recover after reboot (you re-run `dsh-web start` once) |
 | No tmux? **Auto-installs it** (macOS/Linux package managers) | Auto-upgrade non-npm/pnpm dsh installs (only hints) |
-| dsh web running in a plain terminal? **Auto-migrates into tmux** (run `dsh-web start` or `restart` once while it's running) | Skill additions, AGENTS.md edits, etc. (these **already hot-reload**; not needed here) |
+| dsh web running in a plain terminal? **Auto-migrates into tmux** (run `dsh-web start`/`restart`, or enable the watchdog for fully automatic takeover) | Skill additions, AGENTS.md edits, etc. (these **already hot-reload**; not needed here) |
 | Session not named `dsh-web`? **Auto-discovers** the hosting session | Crash auto-restart is a separate opt-in (run-loop) |
 | Port not 3080? **Auto-discovers** (incl. `--port 0` random ports) | — |
 | All terminals closed — dsh web **keeps running**, restartable anytime | — |
@@ -181,6 +190,9 @@ dsh-web attach     # Enter tmux for troubleshooting
 dsh-web autostart-on    # Enable autostart at login (default OFF, user opt-in; launchd/systemd)
 dsh-web autostart-off   # Disable autostart
 dsh-web autostart-status # Check autostart status
+dsh-web watchdog-on     # Enable launchd watchdog: every 30s, auto-migrate any unmanaged dsh web into tmux (default OFF)
+dsh-web watchdog-off    # Disable watchdog
+dsh-web watchdog-status # Check watchdog status
 dsh-web repair       # Fix config: same-file duplicate ids, ghost bundles, cross-source duplicates (auto-backup first)
 dsh-web health-check # Check port + config tree — is it a process or a config problem?
 dsh-web preflight    # Boot self-check (auto-run by start/restart): clear cross-source duplicates
@@ -204,6 +216,15 @@ dsh-web preflight    # Boot self-check (auto-run by start/restart): clear cross-
 > **Autostart is optional and OFF by default** — the skill never enables autostart on its own. Run `dsh-web autostart-on` when you want dsh web to start in tmux after login.
 
 > **Port notification policy**: after `start`/`restart`, the actual port is written to `~/.dsh/logs/last-port.txt`. If the port is the **default (3080), no notification** (everyone knows it); if **non-default** (occupied/random), a system notification shows the actual port — especially useful for unattended autostart.
+
+### Watchdog: fully automatic takeover (optional, default OFF)
+
+`dsh-web watchdog-on` installs a launchd LaunchAgent that checks every 30 s:
+if dsh web is listening but **not** hosted in tmux (e.g. you started it in a
+plain terminal), it automatically migrates it into tmux — so after that,
+closing the terminal never kills dsh web, **no matter how you started it**.
+The watchdog only migrates a *running* web; it never starts a stopped one.
+Disable with `dsh-web watchdog-off`. macOS only (Linux systemd timer: future).
 
 ## Conventions & Boundaries
 
