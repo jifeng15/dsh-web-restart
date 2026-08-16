@@ -704,9 +704,31 @@ cmd_install() {
 
 # 卸载插件：优先热卸；失败回退移除依赖 + 安全重启。
 cmd_remove() {
-  local pkg="$1" result
+  local pkg="$1" result pkg_file managed
   [ -n "${pkg}" ] || die "用法: dsh-web remove <packageName>"
   config_backup   # 改配置前自动备份（防损坏可回滚）
+  # 单源防护：目标在 dsh.profile.bundles 中 = 由 dsh plugin CLI 管理。
+  # 此时热卸必失败（state 无记录）；回退 pnpm remove 只删依赖、不删 bundle
+  # 条目 → 留下 ghost bundle（条目在、依赖没了），下次启动出问题。
+  # 拒绝并引导走 CLI，保持「每个插件只有一个主人」。
+  pkg_file="$(profile_dir)/package.json"
+  if [ -f "${pkg_file}" ]; then
+    managed="$(python3 - "${pkg_file}" "${pkg}" <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1], encoding='utf-8') as f:
+        pkg = json.load(f)
+except (OSError, ValueError):
+    sys.exit(0)
+bundles = (pkg.get('dsh') or {}).get('profile', {}).get('bundles') or []
+if sys.argv[2] in bundles:
+    print('cli-managed')
+PYEOF
+)"
+    if [ -n "${managed}" ]; then
+      die "「${pkg}」在 dsh.profile.bundles 中（由 dsh plugin CLI 管理）。请用 'dsh plugin --profile web remove ${pkg}' 卸载；走 dsh-web remove 会留下 ghost bundle（bundle 条目在、依赖没了）。"
+    fi
+  fi
   if hot_available; then
     log "检测到热卸可用（dsh-web-hot），尝试免重启卸载 ${pkg}..."
     result="$(hot_uninstall "${pkg}")"
