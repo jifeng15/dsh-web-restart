@@ -6,11 +6,18 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.2-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.3-4d6bfe)
 
 **简体中文** | [English](README.md)
 
 ## 更新记录
+
+### v2.0.3（remove 单源防护）
+
+- 🔒 `dsh-web remove <pkg>` 现在**拒绝由 `dsh plugin` 管理的插件**（在
+  `dsh.profile.bundles` 中）并引导走 `dsh plugin --profile web remove <pkg>`。
+  旧回退路径只删依赖、不删 bundle 条目（ghost bundle），现在从源头挡住。
+  卸载路径同样贯彻「每个插件只有一个主人」。
 
 ### v2.0.2（跨来源单源加固）
 
@@ -107,7 +114,7 @@ bash install.sh
 
 ```bash
 dsh-web install <spec>   # 装插件：热装优先（免重启），失败回退安全重启
-dsh-web remove <pkg>     # 卸插件：热卸优先（免重启），失败回退安全重启
+dsh-web remove <pkg>     # 卸插件：热卸优先（免重启），失败回退安全重启（拒绝 CLI 管理的插件——请用 `dsh plugin --profile web remove`）
 dsh-web restart          # 改 profile 配置、升级本体等场景，统一安全重启
 dsh-web session          # 随时查看实际 tmux 会话名（自动发现）
 dsh-web status           # 随时查看状态
@@ -145,7 +152,7 @@ dsh-web status           # 随时查看状态
 
 ```bash
 dsh-web install <spec>   # ★ 装插件：热装优先（免重启），失败回退安全重启
-dsh-web remove <pkg>     # ★ 卸插件：热卸优先（免重启），失败回退安全重启
+dsh-web remove <pkg>     # ★ 卸插件：热卸优先（免重启），失败回退安全重启（拒绝 CLI 管理的插件——请用 `dsh plugin --profile web remove`）
 dsh-web restart    # ★ 兜底/其他：装插件后、改配置、升级本体等场景统一安全重启
 dsh-web start      # 启动/自动接管（无会话则创建，未托管则迁入 tmux）
 dsh-web stop       # 停止
@@ -169,7 +176,8 @@ dsh-web preflight    # boot 前自检（start/restart 自动执行）：清跨�
 > （`cordis.patch.yml` patch 层），**不能两边都有**。若同一插件出现在两边（如外部
 > `dsh plugin add` 收编了之前热装的插件），`preflight`（`start`/`restart` 自动
 > 执行）与 `repair` 会自动检测并移除 patch 层重复行——下次启动不会再因
-> `duplicate loader entry id` 崩溃。
+> `duplicate loader entry id` 崩溃。卸载侧同样：`dsh-web remove` 拒绝 CLI 管理的
+> 插件（会留 ghost bundle），引导走 `dsh plugin remove`。
 
 > **开机自启是可选功能，默认关闭**——skill 不会自动启用任何自启项。需要开机后 dsh web 自动在 tmux 里起来时，用户主动执行 `dsh-web autostart-on` 即可。
 

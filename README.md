@@ -6,11 +6,18 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.2-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.3-4d6bfe)
 
 **English** | [简体中文](README.zh-CN.md)
 
 ## Changelog
+
+### v2.0.3 (remove single-source guard)
+
+- 🔒 `dsh-web remove <pkg>` now **refuses plugins managed by `dsh plugin`** (present
+  in `dsh.profile.bundles`) and points you to `dsh plugin --profile web remove <pkg>`.
+  The old fallback removed the dependency but left the bundle entry behind (ghost
+  bundle). One owner per plugin, now enforced on the remove path too.
 
 ### v2.0.2 (cross-source single-source hardening)
 
@@ -117,7 +124,7 @@ If you prefer the terminal, install/remove plugins with the **hot** commands (no
 
 ```bash
 dsh-web install <spec>   # Install plugin: hot install (no restart) if available, else safe restart
-dsh-web remove <pkg>     # Remove plugin: hot uninstall if available, else safe restart
+dsh-web remove <pkg>     # Remove plugin: hot uninstall if available, else safe restart (refuses CLI-managed — use `dsh plugin --profile web remove`)
 dsh-web restart    # Fallback/other: safe restart after config edits, dsh upgrade, or when hot apply is unavailable
 dsh-web session    # Report the resolved tmux session (auto-discovered)
 dsh-web status     # Check status anytime
@@ -156,7 +163,7 @@ dsh-web status     # Check status anytime
 
 ```bash
 dsh-web install <spec>   # ★ Install plugin: hot install (no restart) if available, else safe restart
-dsh-web remove <pkg>     # ★ Remove plugin: hot uninstall if available, else safe restart
+dsh-web remove <pkg>     # ★ Remove plugin: hot uninstall if available, else safe restart (refuses CLI-managed — use `dsh plugin --profile web remove`)
 dsh-web restart    # ★ Fallback/other: unified safe restart after plugin changes, config edits, or dsh upgrade
 dsh-web start      # Start / auto-takeover (create session if none, migrate into tmux if unmanaged)
 dsh-web stop       # Stop
@@ -182,7 +189,8 @@ dsh-web preflight    # Boot self-check (auto-run by start/restart): clear cross-
 > plugin ends up in both (e.g. an external `dsh plugin add` adopts a previously
 > hot-installed one), `preflight` (auto-run by `start`/`restart`) and `repair`
 > detect it and drop the patch-layer rows automatically — the next boot can't crash
-> with `duplicate loader entry id`.
+> with `duplicate loader entry id`. On the remove side, `dsh-web remove` refuses
+> CLI-managed plugins (it would leave a ghost bundle) and points to `dsh plugin remove`.
 
 > **Autostart is optional and OFF by default** — the skill never enables autostart on its own. Run `dsh-web autostart-on` when you want dsh web to start in tmux after login.
 

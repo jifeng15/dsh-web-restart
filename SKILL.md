@@ -9,7 +9,7 @@ description: >
   removing plugins, after editing profile config (cordis.patch.yml), after upgrading
   the dsh package, when dsh web needs to run persistently without a terminal, or when
   dsh web is down and needs to be brought back up inside tmux.
-version: 1.1.1
+version: 1.1.2
 license: MIT
 metadata:
   dsh:
@@ -127,6 +127,9 @@ bash <skill_dir>/scripts/dsh-web.sh remove <pkg>     # 热卸，免重启
 
 - 若 dsh-web-hot 插件已加载（`install.sh` 会自动装，或 agent 按上面步骤补装），
   走**免重启热装**——pnpm add + 写 patch 层 + include.update 热应用，用户无感。
+- **`remove` 对 CLI 管理的插件会拒绝**（目标在 `dsh.profile.bundles` 中）：热卸必
+  失败，回退只删依赖会留 ghost bundle——此时提示改用
+  `dsh plugin --profile web remove <pkg>`，不要绕过。
 - 若热装不可用（插件未加载 / 变更无法热应用），**自动回退安全重启**。
 - **模块代码级更新**（改插件源码后重装）无法热应用（Node require 缓存），
   必然回退重启——这是结构性限制，不是 bug。
@@ -228,3 +231,6 @@ bash <skill_dir>/scripts/dsh-web.sh attach   # tmux attach 进去看实时日志
    管理）又被热装写进 cordis.patch.yml → 下次启动 `duplicate loader entry id`
    崩溃。✅ `start`/`restart` 已自动 preflight 清理；已崩则 `dsh-web repair`
    一条命令自动修（bundle 侧为权威，patch 层让位）。
+8. **`dsh-web remove` 卸载 CLI 管理的插件** → 回退只 `pnpm remove` 不删 bundle
+   条目 → ghost bundle（条目在、依赖没了）。✅ 已加单源防护：目标在
+   `dsh.profile.bundles` 中会直接拒绝并提示用 `dsh plugin --profile web remove`。
