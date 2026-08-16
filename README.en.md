@@ -252,6 +252,11 @@ auto-reconciled before the next boot — no manual cleanup needed.
 2. `nohup ... &` background tasks get cleaned up when the caller's turn ends → use tmux server
 3. GitHub tarball URL plugin installs leave pnpm lockfile missing `integrity` → use `github:owner/repo#ref`
 4. **Running `dsh web` again while it's already hosted** — the second instance can't bind the port (`EADDRINUSE`), and the hosted one can end up suspended (run-loop exits on the signal). Don't double-launch: use `dsh-web start`/`restart`/`status`. If it happened anyway: the watchdog auto-resumes suspended instances within 30s, and `dsh-web restart` restores proper hosting.
+   ⚠️ **Before you run `restart`**: it briefly disconnects the web and
+   **interrupts any agent session running inside it** — run it when convenient,
+   or let the next session do it. Afterward verify with `dsh-web status` that
+   **run-loop is in the parent chain** (crash auto-restart is back; otherwise
+   the web is only hosted by a bare process).
 
 ## Known issues / optional tweaks
 

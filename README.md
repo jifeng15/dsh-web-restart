@@ -254,6 +254,10 @@ dsh-web.sh restart
    旧实例可能被挂起（run-loop 收到信号退出）。别双启动：用 `dsh-web start`/
    `restart`/`status`。误敲了也别慌：看门狗 30s 内自动恢复被暂停的实例，
    `dsh-web restart` 一键恢复规范托管。
+   ⚠️ **跑 `restart` 前请知悉**：重启会**短暂断开 web、中断正在其中运行的
+   agent 会话**——等方便时再跑，或让下一个会话帮你执行。跑完用
+   `dsh-web status` 验证 **run-loop 出现在父进程链里**（说明崩溃自动重启已恢复，
+   否则只是裸进程托管）。
 
 ## 已知问题 / 可选处理
 
