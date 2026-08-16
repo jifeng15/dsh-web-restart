@@ -10,77 +10,6 @@
 
 **简体中文** | [English](README.md)
 
-## 更新记录
-
-### v2.0.7（与 dsh-market 共存兼容）
-
-- 🔀 `ensureWorkspaceAllowed` 现在**合并**进 dsh-market 写的 `allowBuilds`
-  **对象风格**（name→boolean，含它的 "set this to true or false" 模板），不再用
-  我们的旧列表格式覆盖它。两个工具写同一个文件不再互相清掉。
-
-### v2.0.6（install.sh 自动补 PATH）
-
-- 🔧 `install.sh` 安装 `dsh-web` 命令并**自动把 bin 目录加进 shell PATH**
-  （此前命令装了却找不到）。
-
-### v2.0.5（launchd 看门狗 · 真·自动接管）
-
-- 🐕 **`dsh-web watchdog-on`**：启用 launchd 看门狗（默认关闭，用户主动开启）。
-  每 30s 检测一次——端口有 dsh web 但**不在 tmux 托管**（如普通终端里起的）→
-  自动迁入 tmux。任何方式启动的 dsh web，关终端都不再影响。看门狗**只迁移
-  运行中的 web，绝不主动启动停止的 web**；用 `watchdog-status` / `watchdog-off`
-  管理。
-
-### v2.0.4（迁移竞态修复）
-
-- 🔧 `start` 自动接管（普通终端里的 dsh web → tmux）现在**先建空 tmux 会话**，
-  等旧进程停止、端口释放后才在托管会话里拉起。原来新实例立即启动、和旧进程抢
-  端口（EADDRINUSE），失败会被 run-loop 计入 3 次熔断。
-- ✅ 已用假进程 + 无害启动命令端到端实测：空会话 → 旧进程被杀 → 端口释放 →
-  托管会话内启动成功。
-
-### v2.0.3（remove 单源防护）
-
-- 🔒 `dsh-web remove <pkg>` 现在**拒绝由 `dsh plugin` 管理的插件**（在
-  `dsh.profile.bundles` 中）并引导走 `dsh plugin --profile web remove <pkg>`。
-  旧回退路径只删依赖、不删 bundle 条目（ghost bundle），现在从源头挡住。
-  卸载路径同样贯彻「每个插件只有一个主人」。
-
-### v2.0.2（跨来源单源加固）
-
-- 🛡️ **跨来源重复检测与自愈**——「duplicate loader entry id」崩溃（同一插件既在
-  `dsh.profile.bundles` 又被热装写进 patch 层）现在会被预防并自动修复：
-  - `dsh-web repair` 新增诊断 0：bundles 声明的 entry id ∩ patch 层行 → 移除
-    patch 层重复行（bundle 侧为权威）并同步 `dsh-web-hot.state.json`。
-  - `dsh-web preflight`（boot 前自检）——`start`/`restart` 拉起前自动执行；
-    外部把已热装插件收编进 bundles（如 `dsh plugin add`）后，下次启动不会再崩。
-  - `dsh-web-hot` 启动自愈——state.json 中记录的热装包若已被
-    `dsh.profile.bundles` 收编 → 自动让位（删 patch 行 + 清 state +
-    include.update 热卸载），覆盖运行期漂移 / HMR 重载。
-- 🩹 补记 v2.0.1 的 `repair` / `health-check` / 自动备份（当时 README 未同步）。
-
-### v2.0.1（repair / health-check / 自动备份）
-
-- 🛠️ `dsh-web repair`：同文件重复 id 去重、ghost bundle 移除、state.json 与
-  patch 层对齐；改配置前自动备份（保留最近 10 份）。
-- 🩺 `dsh-web health-check`：端口 + 配置树（`--dump-config`）双检查——区分
-  「进程问题」还是「配置问题」。
-- 🔒 热装拒绝已在 `dsh.profile.bundles` 中的插件（热装侧防重复挂载）。
-
-### v2.0.0（热装免重启）
-
-- 🎉 **新增免重启热装/热卸**：装/卸插件不再需要重启——内置 `dsh-web-hot` 宿主插件，
-  通过 `include.update` 在运行中热应用 patch 行，**PID 全程不变**。
-- ✨ 新命令：`dsh-web install <spec>`（热装优先，失败回退安全重启）、
-  `dsh-web remove <pkg>`（热卸优先，失败回退安全重启）。
-- 🛡️ `dsh-web session`：随时查出实际 tmux 会话名（自动发现，不假设 `dsh-web`）。
-- 📦 模块代码级更新仍须重启（Node require 缓存）——结构性限制，自动回退。
-
-### v1.0.0（安全重启）
-
-- 首版：tmux 托管 + tmux server 独立延迟重启，覆盖装插件/改配置/升级本体。
-- 崩溃自动重启 + 3 次熔断；端口/会话自动发现；双语 README。
-
 ## 它解决什么难题（我们实际遇到的）
 
 我在使用 **dsh web** 的过程中发现：DSH 有三类变更**必须重启进程才能生效**——装/卸/更新插件（bundle 层启动时合成）、修改 profile 配置（`cordis.patch.yml`）、升级 dsh 本体。
@@ -321,3 +250,74 @@ dsh-web.sh restart
 ## License
 
 MIT
+
+## 更新记录
+
+### v2.0.7（与 dsh-market 共存兼容）
+
+- 🔀 `ensureWorkspaceAllowed` 现在**合并**进 dsh-market 写的 `allowBuilds`
+  **对象风格**（name→boolean，含它的 "set this to true or false" 模板），不再用
+  我们的旧列表格式覆盖它。两个工具写同一个文件不再互相清掉。
+
+### v2.0.6（install.sh 自动补 PATH）
+
+- 🔧 `install.sh` 安装 `dsh-web` 命令并**自动把 bin 目录加进 shell PATH**
+  （此前命令装了却找不到）。
+
+### v2.0.5（launchd 看门狗 · 真·自动接管）
+
+- 🐕 **`dsh-web watchdog-on`**：启用 launchd 看门狗（默认关闭，用户主动开启）。
+  每 30s 检测一次——端口有 dsh web 但**不在 tmux 托管**（如普通终端里起的）→
+  自动迁入 tmux。任何方式启动的 dsh web，关终端都不再影响。看门狗**只迁移
+  运行中的 web，绝不主动启动停止的 web**；用 `watchdog-status` / `watchdog-off`
+  管理。
+
+### v2.0.4（迁移竞态修复）
+
+- 🔧 `start` 自动接管（普通终端里的 dsh web → tmux）现在**先建空 tmux 会话**，
+  等旧进程停止、端口释放后才在托管会话里拉起。原来新实例立即启动、和旧进程抢
+  端口（EADDRINUSE），失败会被 run-loop 计入 3 次熔断。
+- ✅ 已用假进程 + 无害启动命令端到端实测：空会话 → 旧进程被杀 → 端口释放 →
+  托管会话内启动成功。
+
+### v2.0.3（remove 单源防护）
+
+- 🔒 `dsh-web remove <pkg>` 现在**拒绝由 `dsh plugin` 管理的插件**（在
+  `dsh.profile.bundles` 中）并引导走 `dsh plugin --profile web remove <pkg>`。
+  旧回退路径只删依赖、不删 bundle 条目（ghost bundle），现在从源头挡住。
+  卸载路径同样贯彻「每个插件只有一个主人」。
+
+### v2.0.2（跨来源单源加固）
+
+- 🛡️ **跨来源重复检测与自愈**——「duplicate loader entry id」崩溃（同一插件既在
+  `dsh.profile.bundles` 又被热装写进 patch 层）现在会被预防并自动修复：
+  - `dsh-web repair` 新增诊断 0：bundles 声明的 entry id ∩ patch 层行 → 移除
+    patch 层重复行（bundle 侧为权威）并同步 `dsh-web-hot.state.json`。
+  - `dsh-web preflight`（boot 前自检）——`start`/`restart` 拉起前自动执行；
+    外部把已热装插件收编进 bundles（如 `dsh plugin add`）后，下次启动不会再崩。
+  - `dsh-web-hot` 启动自愈——state.json 中记录的热装包若已被
+    `dsh.profile.bundles` 收编 → 自动让位（删 patch 行 + 清 state +
+    include.update 热卸载），覆盖运行期漂移 / HMR 重载。
+- 🩹 补记 v2.0.1 的 `repair` / `health-check` / 自动备份（当时 README 未同步）。
+
+### v2.0.1（repair / health-check / 自动备份）
+
+- 🛠️ `dsh-web repair`：同文件重复 id 去重、ghost bundle 移除、state.json 与
+  patch 层对齐；改配置前自动备份（保留最近 10 份）。
+- 🩺 `dsh-web health-check`：端口 + 配置树（`--dump-config`）双检查——区分
+  「进程问题」还是「配置问题」。
+- 🔒 热装拒绝已在 `dsh.profile.bundles` 中的插件（热装侧防重复挂载）。
+
+### v2.0.0（热装免重启）
+
+- 🎉 **新增免重启热装/热卸**：装/卸插件不再需要重启——内置 `dsh-web-hot` 宿主插件，
+  通过 `include.update` 在运行中热应用 patch 行，**PID 全程不变**。
+- ✨ 新命令：`dsh-web install <spec>`（热装优先，失败回退安全重启）、
+  `dsh-web remove <pkg>`（热卸优先，失败回退安全重启）。
+- 🛡️ `dsh-web session`：随时查出实际 tmux 会话名（自动发现，不假设 `dsh-web`）。
+- 📦 模块代码级更新仍须重启（Node require 缓存）——结构性限制，自动回退。
+
+### v1.0.0（安全重启）
+
+- 首版：tmux 托管 + tmux server 独立延迟重启，覆盖装插件/改配置/升级本体。
+- 崩溃自动重启 + 3 次熔断；端口/会话自动发现；双语 README。

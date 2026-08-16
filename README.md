@@ -10,90 +10,6 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-## Changelog
-
-### v2.0.7 (coexists with dsh-market on pnpm-workspace.yaml)
-
-- 🔀 `ensureWorkspaceAllowed` now **merges** into dsh-market's `allowBuilds`
-  object style (name → boolean, incl. its "set this to true or false" template)
-  instead of overwriting it with our legacy list format. Both tools can now
-  write the same file without clobbering each other.
-
-### v2.0.6 (install.sh auto PATH)
-
-- 🔧 `install.sh` installs the `dsh-web` command and **auto-adds its bin dir to
-  your shell PATH** (previously the command was installed but not found).
-
-### v2.0.5 (launchd watchdog — fully automatic takeover)
-
-- 🐕 **`dsh-web watchdog-on`**: a launchd LaunchAgent checks every 30 s — if dsh
-  web is listening but **not** hosted in tmux (e.g. you started it in a plain
-  terminal), it auto-migrates it into tmux. So no matter how you start dsh web,
-  closing the terminal no longer kills it. Opt-in (default OFF), managed with
-  `watchdog-status` / `watchdog-off`. The watchdog only migrates a *running* web —
-  it never starts a stopped one.
-
-### v2.0.4 (migration race fix)
-
-- 🔧 `start` auto-takeover (plain-terminal dsh web → tmux) now creates an **empty**
-  tmux session first and launches dsh web only after the old process is stopped and
-  the port is free. Previously the new instance started immediately and fought the
-  old one for the port (`EADDRINUSE`), burning the run-loop's 3-strike breaker.
-- ✅ Verified end-to-end with a dummy process + harmless launch command: empty
-  session → old process killed → port released → dsh web starts inside tmux.
-
-### v2.0.3 (remove single-source guard)
-
-- 🔒 `dsh-web remove <pkg>` now **refuses plugins managed by `dsh plugin`** (present
-  in `dsh.profile.bundles`) and points you to `dsh plugin --profile web remove <pkg>`.
-  The old fallback removed the dependency but left the bundle entry behind (ghost
-  bundle). One owner per plugin, now enforced on the remove path too.
-
-### v2.0.2 (cross-source single-source hardening)
-
-- 🛡️ **Cross-source duplicate detection & self-heal** — the `duplicate loader
-  entry id` crash (same plugin mounted via both `dsh.profile.bundles` and the
-  hot-install patch layer) is now prevented and auto-repaired:
-  - `dsh-web repair` runs a new cross-source check first: entry ids declared by
-    bundles ∩ patch-layer rows → drops the patch-layer duplicates (bundles side
-    is authoritative) and syncs `dsh-web-hot.state.json`.
-  - `dsh-web preflight` (boot self-check) — `start`/`restart` run it before
-    launching, so an external takeover (e.g. `dsh plugin add` adopting a
-    hot-installed plugin) can never crash the next boot.
-  - `dsh-web-hot` startup self-heal — the host plugin drops patch rows for any
-    hot-managed bundle that `dsh.profile.bundles` has since adopted (covers
-    running-process drift / HMR reloads).
-- 🩹 v2.0.1's `repair` / `health-check` / auto config backup are now documented
-  here too (they shipped in v2.0.1 but the README wasn't synced).
-
-### v2.0.1 (repair & health-check)
-
-- 🛠️ `dsh-web repair`: dedup duplicate ids, remove ghost bundles, resync
-  `dsh-web-hot.state.json`; auto-backup before any config change (keeps last 10).
-- 🩺 `dsh-web health-check`: port readiness + config tree (`--dump-config`) —
-  tells you whether it's a process or a config problem.
-- 🔒 Hot install rejects bundles already in `dsh.profile.bundles` (prevents the
-  duplicate loader entry id crash from the hot-install side).
-
-### v2.0.0 (hot install, no restart)
-
-- 🎉 **Hot install/uninstall** — installing/removing plugins no longer restarts.
-  Bundled `dsh-web-hot` host plugin hot-applies patch rows via `include.update`
-  at runtime; **the PID never changes**.
-- ✨ New commands: `dsh-web install <spec>` (hot first, fallback to safe restart),
-  `dsh-web remove <pkg>` (hot first, fallback to safe restart).
-- 🛡️ `dsh-web session`: report the resolved tmux session (auto-discovered, never
-  assumes `dsh-web`).
-- 📦 Module-level code updates still require a restart (Node require cache) —
-  structural limit, falls back automatically.
-
-### v1.0.0 (safe restart)
-
-- First release: tmux hosting + tmux-server independent delayed restart, covering
-  plugin changes, config edits, and dsh upgrades.
-- Crash auto-restart with a 3-strike circuit breaker; port/session auto-discovery;
-  bilingual README.
-
 ## The problem it solves (what we actually hit)
 
 While using **dsh web**, I found that DSH has three kinds of changes that **require a process restart to take effect** — installing/removing/updating plugins (bundle layers are composed at startup), editing profile config (`cordis.patch.yml`), and upgrading the dsh package itself.
@@ -334,3 +250,87 @@ auto-reconciled before the next boot — no manual cleanup needed.
 ## License
 
 MIT
+
+## Changelog
+
+### v2.0.7 (coexists with dsh-market on pnpm-workspace.yaml)
+
+- 🔀 `ensureWorkspaceAllowed` now **merges** into dsh-market's `allowBuilds`
+  object style (name → boolean, incl. its "set this to true or false" template)
+  instead of overwriting it with our legacy list format. Both tools can now
+  write the same file without clobbering each other.
+
+### v2.0.6 (install.sh auto PATH)
+
+- 🔧 `install.sh` installs the `dsh-web` command and **auto-adds its bin dir to
+  your shell PATH** (previously the command was installed but not found).
+
+### v2.0.5 (launchd watchdog — fully automatic takeover)
+
+- 🐕 **`dsh-web watchdog-on`**: a launchd LaunchAgent checks every 30 s — if dsh
+  web is listening but **not** hosted in tmux (e.g. you started it in a plain
+  terminal), it auto-migrates it into tmux. So no matter how you start dsh web,
+  closing the terminal no longer kills it. Opt-in (default OFF), managed with
+  `watchdog-status` / `watchdog-off`. The watchdog only migrates a *running* web —
+  it never starts a stopped one.
+
+### v2.0.4 (migration race fix)
+
+- 🔧 `start` auto-takeover (plain-terminal dsh web → tmux) now creates an **empty**
+  tmux session first and launches dsh web only after the old process is stopped and
+  the port is free. Previously the new instance started immediately and fought the
+  old one for the port (`EADDRINUSE`), burning the run-loop's 3-strike breaker.
+- ✅ Verified end-to-end with a dummy process + harmless launch command: empty
+  session → old process killed → port released → dsh web starts inside tmux.
+
+### v2.0.3 (remove single-source guard)
+
+- 🔒 `dsh-web remove <pkg>` now **refuses plugins managed by `dsh plugin`** (present
+  in `dsh.profile.bundles`) and points you to `dsh plugin --profile web remove <pkg>`.
+  The old fallback removed the dependency but left the bundle entry behind (ghost
+  bundle). One owner per plugin, now enforced on the remove path too.
+
+### v2.0.2 (cross-source single-source hardening)
+
+- 🛡️ **Cross-source duplicate detection & self-heal** — the `duplicate loader
+  entry id` crash (same plugin mounted via both `dsh.profile.bundles` and the
+  hot-install patch layer) is now prevented and auto-repaired:
+  - `dsh-web repair` runs a new cross-source check first: entry ids declared by
+    bundles ∩ patch-layer rows → drops the patch-layer duplicates (bundles side
+    is authoritative) and syncs `dsh-web-hot.state.json`.
+  - `dsh-web preflight` (boot self-check) — `start`/`restart` run it before
+    launching, so an external takeover (e.g. `dsh plugin add` adopting a
+    hot-installed plugin) can never crash the next boot.
+  - `dsh-web-hot` startup self-heal — the host plugin drops patch rows for any
+    hot-managed bundle that `dsh.profile.bundles` has since adopted (covers
+    running-process drift / HMR reloads).
+- 🩹 v2.0.1's `repair` / `health-check` / auto config backup are now documented
+  here too (they shipped in v2.0.1 but the README wasn't synced).
+
+### v2.0.1 (repair & health-check)
+
+- 🛠️ `dsh-web repair`: dedup duplicate ids, remove ghost bundles, resync
+  `dsh-web-hot.state.json`; auto-backup before any config change (keeps last 10).
+- 🩺 `dsh-web health-check`: port readiness + config tree (`--dump-config`) —
+  tells you whether it's a process or a config problem.
+- 🔒 Hot install rejects bundles already in `dsh.profile.bundles` (prevents the
+  duplicate loader entry id crash from the hot-install side).
+
+### v2.0.0 (hot install, no restart)
+
+- 🎉 **Hot install/uninstall** — installing/removing plugins no longer restarts.
+  Bundled `dsh-web-hot` host plugin hot-applies patch rows via `include.update`
+  at runtime; **the PID never changes**.
+- ✨ New commands: `dsh-web install <spec>` (hot first, fallback to safe restart),
+  `dsh-web remove <pkg>` (hot first, fallback to safe restart).
+- 🛡️ `dsh-web session`: report the resolved tmux session (auto-discovered, never
+  assumes `dsh-web`).
+- 📦 Module-level code updates still require a restart (Node require cache) —
+  structural limit, falls back automatically.
+
+### v1.0.0 (safe restart)
+
+- First release: tmux hosting + tmux-server independent delayed restart, covering
+  plugin changes, config edits, and dsh upgrades.
+- Crash auto-restart with a 3-strike circuit breaker; port/session auto-discovery;
+  bilingual README.
