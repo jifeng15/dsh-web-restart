@@ -222,15 +222,6 @@ dsh-web.sh restart
 2. `nohup ... &` background tasks get cleaned up when the caller's turn ends → use tmux server
 3. GitHub tarball URL plugin installs leave pnpm lockfile missing `integrity` → use `github:owner/repo#ref`
 
-## Docs (public vs internal)
-
-**Public (on GitHub)**: `README.md` / `README.zh-CN.md` (user docs), `SKILL.md` (agent-facing skill).
-
-**Internal (local-only, not pushed — per global convention)**:
-`AGENTS.md` (project rules), `SPECS.md` (task spec), `HANDOFF.md` (current state),
-`VERSIONS.md` (version history). These live in the repo working tree for local
-development but are excluded from git (see `.gitignore`).
-
 ## License
 
 MIT

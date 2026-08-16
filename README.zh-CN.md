@@ -219,14 +219,6 @@ dsh-web.sh restart
 2. `nohup ... &` 排定后台任务会被调用方回合清理 → 用 tmux server
 3. GitHub tarball URL 装插件会让 pnpm 锁文件缺 integrity → 用 `github:owner/repo#ref`
 
-## 文档（公开 vs 内部）
-
-**公开（GitHub 上）**：`README.md` / `README.zh-CN.md`（用户文档）、`SKILL.md`（agent 用 skill）。
-
-**内部（仅本地，不上传——遵循全局约定）**：`AGENTS.md`（项目规则）、
-`SPECS.md`（任务规格）、`HANDOFF.md`（当前状态）、`VERSIONS.md`（版本历史）。
-这些文件在本地工作树用于开发，但被 `.gitignore` 排除、不随仓库公开。
-
 ## License
 
 MIT
