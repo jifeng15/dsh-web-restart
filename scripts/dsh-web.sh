@@ -296,9 +296,163 @@ cmd_restart() {
   # - 不要在括号内用 $SESSION 外层展开出问题：tmux run-shell 以 server 环境执行。
   log "由 tmux server 排定自动重启（会话 ${SESSION}，约 5-8 秒完成，页面会短暂断开）"
   tmux run-shell -b "sleep 3; tmux send-keys -t ${SESSION} C-c; sleep 2; tmux send-keys -t ${SESSION} '$(crash_loop_cmd)' Enter; echo \"dsh-web restarted \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
+  # 延迟健康检查：等重启完成后验证端口与配置树，区分进程/配置问题
+  ( sleep 10; "${BASH_SOURCE[0]}" health-check ) >/dev/null 2>&1 &
   # 延迟探测重启后的实际端口（等 6 秒新进程接管），写入 last-port.txt 并通知
   ( sleep 6; "${BASH_SOURCE[0]}" report-port ) >/dev/null 2>&1 &
   log "已排定；请稍后刷新 http://127.0.0.1:${PORT}"
+}
+
+# 健康检查：验证 dsh web 是否真的起来了，以及配置树是否健康。
+# 区分「进程问题」与「配置问题」——配置损坏时重启多少次都会失败，应提示修配置。
+cmd_health_check() {
+  local port_ok=no config_ok=no
+  if is_listening; then port_ok=yes; fi
+  if dsh --profile "${PROFILE:-web}" --dump-config >/dev/null 2>&1; then config_ok=yes; fi
+  if [ "${port_ok}" = "yes" ] && [ "${config_ok}" = "yes" ]; then
+    log "健康检查通过：端口 ${PORT} 就绪，配置树正常"
+    return 0
+  fi
+  # 有异常：报告具体是哪个问题
+  if [ "${port_ok}" != "yes" ]; then
+    log "⚠️ 端口 ${PORT} 未就绪——进程可能未启动"
+  fi
+  if [ "${config_ok}" != "yes" ]; then
+    log "⚠️ 配置树校验失败（--dump-config 报错）——可能是配置损坏（如 cordis.patch.yml 重复行 / YAML 错误 / ghost bundle）"
+    log "   → 用 'dsh-web repair' 诊断并修复配置，不要反复 restart"
+  fi
+  if [ "${port_ok}" != "yes" ] && [ "${config_ok}" != "yes" ]; then
+    log "   → 端口和配置都异常，优先修配置（repair），再重启"
+  fi
+  return 1
+}
+
+# 自动备份 profile 配置（cordis.patch.yml / state.json / pnpm-workspace.yaml）。
+# 任何修改配置的操作前调用；备份到 profile/backups/，保留最近 N 份。
+config_backup() {
+  local profile_dir="$HOME/.dsh/profiles/${PROFILE:-web}"
+  local backup_dir="${profile_dir}/backups"
+  mkdir -p "${backup_dir}"
+  local ts="$(date +%Y%m%d-%H%M%S)"
+  for f in cordis.patch.yml dsh-web-hot.state.json pnpm-workspace.yaml; do
+    if [ -f "${profile_dir}/${f}" ]; then
+      cp "${profile_dir}/${f}" "${backup_dir}/${f}.${ts}.bak"
+    fi
+  done
+  # 只保留最近 10 份，避免无限堆积
+  ls -1t "${backup_dir}"/cordis.patch.yml.*.bak 2>/dev/null | tail -n +11 | xargs -r rm -f
+  ls -1t "${backup_dir}"/dsh-web-hot.state.json.*.bak 2>/dev/null | tail -n +11 | xargs -r rm -f
+  log "配置已备份到 ${backup_dir}（时间戳 ${ts}）"
+}
+
+# 修复配置：诊断常见损坏并尝试自动修复，改前自动备份，修复后验证。
+cmd_repair() {
+  local profile_dir="$HOME/.dsh/profiles/${PROFILE:-web}"
+  local patch_file="${profile_dir}/cordis.patch.yml"
+  local state_file="${profile_dir}/dsh-web-hot.state.json"
+  local pkg_file="${profile_dir}/package.json"
+
+  log "=== dsh-web repair：诊断配置 ==="
+  local config_ok=no
+  if dsh --profile "${PROFILE:-web}" --dump-config >/dev/null 2>&1; then config_ok=yes; fi
+  if [ "${config_ok}" = "yes" ]; then
+    log "配置树正常（--dump-config 通过）——无需修复"
+    return 0
+  fi
+  log "⚠️ 配置树校验失败，开始诊断..."
+
+  # 备份当前（可能损坏的）配置
+  config_backup
+
+  # 诊断 1：cordis.patch.yml 重复 id
+  if [ -f "${patch_file}" ]; then
+    local dup
+    dup="$(grep -oE '^\s*-?\s*id:\s*[A-Za-z0-9._-]+' "${patch_file}" 2>/dev/null | awk '{print $NF}' | sort | uniq -d | head -1)"
+    if [ -n "${dup}" ]; then
+      log "诊断：cordis.patch.yml 存在重复 id『${dup}』（duplicate loader entry id 的根源）"
+      # 备份后去重：保留每个 id 第一次出现，删除后续重复行所在 insert
+      log "修复：去重重复 id 的行..."
+      python3 - "${patch_file}" <<'PYEOF'
+import sys, re
+path = sys.argv[1]
+with open(path) as f:
+    lines = f.readlines()
+seen = set()
+out = []
+i = 0
+while i < len(lines):
+    line = lines[i]
+    # 处理 insert 块（`- insert:` 后跟缩进子行）
+    if re.match(r'^\s*-\s*insert:\s*$', line):
+        j = i + 1
+        block = [line]
+        while j < len(lines) and (lines[j].startswith(' ') or lines[j].startswith('\t')):
+            block.append(lines[j]); j += 1
+        first_id = None
+        for bl in block:
+            m = re.match(r'^\s*-?\s*id:\s*([A-Za-z0-9._-]+)', bl)
+            if m:
+                first_id = m.group(1)
+                break
+        if first_id and first_id in seen:
+            i = j  # 跳过整个重复块（含块头），不残留空块
+            continue
+        if first_id:
+            seen.add(first_id)
+        out.extend(block)
+        i = j
+    else:
+        out.append(line)
+        i += 1
+with open(path, 'w') as f:
+    f.writelines(out)
+print("已去重（整块删除重复 id 的 insert，含块头）")
+PYEOF
+    fi
+  fi
+
+  # 诊断 2：ghost bundle（bundles 指向不存在的包）
+  if [ -f "${pkg_file}" ]; then
+    python3 - "${pkg_file}" "${profile_dir}" <<'PYEOF'
+import json, sys, os
+pkg_path, profile_dir = sys.argv[1], sys.argv[2]
+with open(pkg_path) as f:
+    pkg = json.load(f)
+bundles = pkg.get('dsh', {}).get('profile', {}).get('bundles', [])
+ghosts = []
+for name in bundles:
+    if not os.path.exists(os.path.join(profile_dir, 'node_modules', name)):
+        # 官方 in-box bundle 可能在 dsh 安装闭包，这里只报告明显缺失的
+        ghosts.append(name)
+if ghosts:
+    print("诊断：ghost bundle（bundles 列出但 node_modules 缺失）:", ghosts)
+    pkg['dsh']['profile']['bundles'] = [b for b in bundles if b not in ghosts]
+    with open(pkg_path, 'w') as f:
+        json.dump(pkg, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+    print("已从 bundles 移除:", ghosts)
+PYEOF
+  fi
+
+  # 诊断 3：state.json 与配置不一致 → 若 cordis.patch.yml 为空则清空 state
+  if [ -f "${state_file}" ] && [ -f "${patch_file}" ]; then
+    if ! grep -qE '^\s*-?\s*insert:|^\s*-?\s*id:' "${patch_file}" 2>/dev/null; then
+      log "诊断：cordis.patch.yml 无有效行（热装管理器无挂载）——清空 state.json 对齐"
+      echo '{"bundles": [], "disables": {}}' > "${state_file}"
+      log "已清空 dsh-web-hot.state.json"
+    fi
+  fi
+
+  # 修复后验证
+  log "修复完成，重新验证配置树..."
+  if dsh --profile "${PROFILE:-web}" --dump-config >/dev/null 2>&1; then
+    log "✅ 配置树校验通过——可安全重启（dsh-web restart）"
+    return 0
+  else
+    log "⚠️ 仍校验失败——请手动检查 ${patch_file} 或查看 backups/ 回滚"
+    log "  备份位置: ${profile_dir}/backups/"
+    return 1
+  fi
 }
 
 cmd_stop() {
@@ -338,6 +492,7 @@ hot_uninstall() { curl -s -m 300 -X POST "http://127.0.0.1:${PORT}/dsh-web-hot/u
 cmd_install() {
   local spec="$1" result
   [ -n "${spec}" ] || die "用法: dsh-web install <spec>（npm 包名 / git URL / github:owner/repo）"
+  config_backup   # 改配置前自动备份（防损坏可回滚）
   if hot_available; then
     log "检测到热装可用（dsh-web-hot），尝试免重启安装 ${spec}..."
     result="$(hot_install "${spec}")"
@@ -362,6 +517,7 @@ cmd_install() {
 cmd_remove() {
   local pkg="$1" result
   [ -n "${pkg}" ] || die "用法: dsh-web remove <packageName>"
+  config_backup   # 改配置前自动备份（防损坏可回滚）
   if hot_available; then
     log "检测到热卸可用（dsh-web-hot），尝试免重启卸载 ${pkg}..."
     result="$(hot_uninstall "${pkg}")"
@@ -548,6 +704,8 @@ case "${1:-}" in
   upgrade) cmd_upgrade ;;
   install) cmd_install "${2:-}" ;;
   remove)  cmd_remove "${2:-}" ;;
+  repair)  cmd_repair ;;
+  health-check) cmd_health_check ;;
   report-port) report_port ;;
   autostart-on) autostart_on ;;
   autostart-off) autostart_off ;;
@@ -556,5 +714,5 @@ case "${1:-}" in
   status)  cmd_status ;;
   session) cmd_session ;;
   attach)  cmd_attach ;;
-  *) die "用法: dsh-web.sh {start|restart|install|remove|reload|upgrade|stop|status|session|attach}" ;;
+  *) die "用法: dsh-web.sh {start|restart|install|remove|reload|upgrade|repair|health-check|stop|status|session|attach}" ;;
 esac
