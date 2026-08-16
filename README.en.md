@@ -253,6 +253,25 @@ auto-reconciled before the next boot — no manual cleanup needed.
 3. GitHub tarball URL plugin installs leave pnpm lockfile missing `integrity` → use `github:owner/repo#ref`
 4. **Running `dsh web` again while it's already hosted** — the second instance can't bind the port (`EADDRINUSE`), and the hosted one can end up suspended (run-loop exits on the signal). Don't double-launch: use `dsh-web start`/`restart`/`status`. If it happened anyway: the watchdog auto-resumes suspended instances within 30s, and `dsh-web restart` restores proper hosting.
 
+## Known issues / optional tweaks
+
+- **pnpm 11's 24h `minimumReleaseAge` supply-chain gate**: updating plugins
+  **published within the last 24h** via `dsh plugin` / dsh-market can warn or
+  fail ("too-young release"). This project's hot install bypasses it per
+  operation with `--config.minimumReleaseAge=0`, so it is unaffected; dsh-market
+  retries once itself, but can still hit mirror sync lag (this machine's
+  `~/.npmrc` points to npmmirror and dsh-market does not pin the official
+  registry).
+  **To allow it globally** (e.g. you often install freshly-published plugins),
+  add to `~/.dsh/profiles/web/pnpm-workspace.yaml`:
+
+  ```yaml
+  minimumReleaseAge: 0
+  ```
+
+  Trade-off: you give up the 24h gate (guards against freshly-published-abuse
+  packages). Choose as you see fit; apply with `dsh-web reload`.
+
 ## License
 
 MIT

@@ -255,6 +255,23 @@ dsh-web.sh restart
    `restart`/`status`。误敲了也别慌：看门狗 30s 内自动恢复被暂停的实例，
    `dsh-web restart` 一键恢复规范托管。
 
+## 已知问题 / 可选处理
+
+- **pnpm 11 的 24 小时 minimumReleaseAge 供应链闸门**：锁文件里出现**当天刚发布**
+  的插件时，`dsh plugin` / dsh-market 等工具的更新可能警告或失败（"too-young
+  release"）。本项目的热装按次用 `--config.minimumReleaseAge=0` 绕过，不受影响；
+  dsh-market 会自带一次重试，但可能仍受镜像同步滞后影响（本机 `~/.npmrc` 指向
+  npmmirror，dsh-market 未固定官方 registry）。
+  **想彻底放行**（例如你经常装当天新发布的插件），可在
+  `~/.dsh/profiles/web/pnpm-workspace.yaml` 加：
+
+  ```yaml
+  minimumReleaseAge: 0
+  ```
+
+  代价：放弃 24h 供应链闸门（防"刚发布即被滥用"的包）。按需取舍，改完
+  `dsh-web reload` 生效。
+
 ## License
 
 MIT
