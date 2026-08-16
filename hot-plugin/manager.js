@@ -238,6 +238,13 @@ function resolvePkgDir(profileDir, packageName) {
   return existsSync(join(dir, 'package.json')) ? dir : undefined
 }
 
+/** Read the profile's dsh.profile.bundles list (bundles managed by dsh plugin CLI). */
+function readProfileBundles(profileDir) {
+  const manifest = readPkgManifest(profileDir)
+  const bundles = manifest?.dsh?.profile?.bundles
+  return Array.isArray(bundles) ? bundles.filter((name) => typeof name === 'string') : []
+}
+
 function installationPackageDir(packageName) {
   try {
     return dirname(managerRequire.resolve(`${packageName}/package.json`))
@@ -396,6 +403,16 @@ async function applyToInclude(ctx, ownedKeys, addedRows, removal = 'insert-rows'
 export async function installBundle(ctx, profileDir, spec) {
   const invalid = validatePackageSpec(spec)
   if (invalid !== undefined) return { ok: false, message: invalid }
+  // 冲突防护：若目标包已作为 bundle 存在（由 dsh plugin CLI 管理，自带
+  // cordis.patch.yml 自动挂载），再热装会重复 insert 相同 id → 启动崩溃
+  // （duplicate loader entry id）。此时拒绝热装，提示改用 dsh plugin 管理。
+  const existingName = nameFromNpmSpec(spec)
+  if (existingName !== undefined && readProfileBundles(profileDir).includes(existingName)) {
+    return {
+      ok: false,
+      message: `${existingName} 已在 dsh.profile.bundles 中（由 dsh plugin 管理，自带 bundle patch 自动挂载）。请用 'dsh plugin --profile web add|remove ${existingName}' 管理，不要走热装，否则重复挂载会导致启动崩溃。`,
+    }
+  }
   let pnpm = await runPnpmSafe(['add', spec], profileDir)
   if (pnpm.exitCode !== 0) {
     const tail = pnpm.tail
