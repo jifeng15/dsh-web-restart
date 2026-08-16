@@ -15,6 +15,7 @@
 #   dsh-web.sh upgrade   升级 dsh 本体（npm 全局）后自动重启生效
 #   dsh-web.sh stop      停止 dsh web（Ctrl-C；tmux 托管保留，可 restart 恢复）
 #   dsh-web.sh quit      彻底退出（停止 + 关闭托管会话 + 清理痕迹，不再挂在后台）
+#   dsh-web.sh heal      修复裸进程托管（run-loop 丢失时自动恢复为规范托管；= 一次安全重启）
 #   dsh-web.sh status    查看状态（会话 / 端口 / PID）
 #   dsh-web.sh attach    进入 tmux 会话（手动排查用）
 #   dsh-web.sh report-port  把实际端口写入 last-port.txt 并发系统通知
@@ -949,6 +950,63 @@ watchdog_off() {
 
 # 看门狗单次检测（由 launchd 每 30s 调用；也可手动跑）。
 # 端口有 dsh web 但不在 tmux 托管 → 自动迁入 tmux。绝不主动启动停止的 web。
+# 检测「裸进程托管」：端口有 dsh web，且在托管会话的 pane 进程树里，但父进程链
+# 里没有 run-loop.sh（崩溃自动重启丢失）。输出裸进程 PID；规范托管/未托管输出空。
+bare_hosted_web() {
+  local pid np cmd pane_pids
+  pid="$(port_pid)"
+  [ -z "${pid}" ] && return 1
+  # 必须在托管会话的进程树里（否则是普通终端裸跑 → 走迁移，不归这里管）
+  pane_pids="$(tmux list-panes -t "${SESSION}" -F '#{pane_pid}' 2>/dev/null | tr '\n' ' ')"
+  pid_in_session_tree "${pid}" "${pane_pids}" || return 1
+  # 向上遍历父链找 run-loop
+  np="${pid}"
+  for _ in $(seq 1 8); do
+    cmd="$(ps -o command= -p "${np}" 2>/dev/null)"
+    if printf '%s' "${cmd}" | grep -q "run-loop.sh"; then
+      return 1   # 规范托管（有 run-loop）
+    fi
+    np="$(ps -o ppid= -p "${np}" 2>/dev/null | tr -d ' ')"
+    [ -z "${np}" ] || [ "${np}" = "1" ] && break
+  done
+  printf '%s' "${pid}"
+  return 0
+}
+
+# 把裸进程托管修复为 run-loop 托管：经 tmux server 延迟执行
+# 「停裸进程 → 等端口释放 → preflight → 同会话用 crash_loop_cmd（run-loop）拉起」。
+# 修复即一次重启：会短暂断开 web、中断其中的 agent 会话（tmux server 独立执行，
+# 调用方被杀也完成）。带 5 分钟冷却，避免反复打扰。
+auto_rehost() {
+  local bare_pid="$1" now last self
+  now="$(date +%s)"
+  last="$(cat "${LOG_DIR}/last-rehost" 2>/dev/null || echo 0)"
+  if [ $(( now - last )) -lt 300 ]; then
+    log "watchdog：裸进程托管（PID ${bare_pid}）——5 分钟内已修复过，跳过本轮"
+    return 0
+  fi
+  log "watchdog：检测到裸进程托管（PID ${bare_pid}，run-loop 丢失），自动修复为 run-loop 托管..."
+  printf '%s\n' "${now}" > "${LOG_DIR}/last-rehost"
+  self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dsh-web.sh"
+  tmux run-shell -b "kill -TERM ${bare_pid} 2>/dev/null; sleep 2; for i in \$(seq 1 12); do lsof -nP -iTCP:${PORT} -sTCP:LISTEN -t >/dev/null 2>&1 || break; sleep 1; done; ${self} preflight >/dev/null 2>&1 || true; tmux send-keys -t ${SESSION} C-c; sleep 1; tmux send-keys -t ${SESSION} '$(crash_loop_cmd)' Enter; echo \"dsh-web re-hosted \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
+  log "已排定修复：${bare_pid} 停止后 dsh web 将以 run-loop 托管重启（约 5-8 秒，agent 会话会中断一次）"
+}
+
+# 手动修复裸进程托管（与看门狗自动修复同一逻辑，无冷却限制）。
+# 注意：修复 = 一次安全重启，会中断 web 中正在运行的 agent 会话（tmux server
+# 独立执行，调用方被杀也能完成）。
+cmd_heal() {
+  resolve_session || true
+  local bare_pid
+  bare_pid="$(bare_hosted_web)"
+  if [ -n "${bare_pid}" ]; then
+    log "检测到裸进程托管（PID ${bare_pid}，run-loop 丢失），正在修复为 run-loop 托管..."
+    auto_rehost "${bare_pid}"
+  else
+    log "未检测到裸进程托管——dsh web 已是规范托管（run-loop），无需修复"
+  fi
+}
+
 cmd_watchdog_tick() {
   # 自愈 0：若存在处于 stopped（T）状态的 dsh web 进程（双启动可能把旧实例
   # 挂起——新实例抢端口失败，旧实例被干扰后进入暂停），发送 SIGCONT 恢复。
@@ -959,6 +1017,14 @@ cmd_watchdog_tick() {
     kill -CONT "${p}" 2>/dev/null && log "watchdog：已恢复被暂停的 dsh web 进程（PID ${p}）"
   done
   if ! is_listening; then return 0; fi          # web 没在跑 → 无事可做
+  resolve_session || true                       # 确保 SESSION 指向实际托管会话
+  # 自愈 1：裸进程托管（在托管会话里但 run-loop 丢失）→ 自动修复为 run-loop 托管
+  local bare_pid
+  bare_pid="$(bare_hosted_web)"
+  if [ -n "${bare_pid}" ]; then
+    auto_rehost "${bare_pid}"
+    return 0
+  fi
   if resolve_session >/dev/null 2>&1; then return 0; fi  # 已在 tmux 托管 → 无事可做
   log "watchdog：检测到未托管的 dsh web（端口 ${PORT}），自动迁入 tmux..."
   migrate_into_tmux
@@ -1063,8 +1129,9 @@ case "${1:-}" in
   autostart-status) autostart_status ;;
   stop)    cmd_stop ;;
   quit)    cmd_quit ;;
+  heal)    cmd_heal ;;
   status)  cmd_status ;;
   session) cmd_session ;;
   attach)  cmd_attach ;;
-  *) die "用法: dsh-web.sh {start|restart|install|remove|reload|upgrade|repair|health-check|preflight|watchdog-on|watchdog-off|watchdog-status|stop|quit|status|session|attach}" ;;
+  *) die "用法: dsh-web.sh {start|restart|install|remove|reload|upgrade|repair|health-check|preflight|watchdog-on|watchdog-off|watchdog-status|stop|quit|heal|status|session|attach}" ;;
 esac

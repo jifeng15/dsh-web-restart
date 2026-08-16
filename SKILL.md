@@ -9,7 +9,7 @@ description: >
   removing plugins, after editing profile config (cordis.patch.yml), after upgrading
   the dsh package, when dsh web needs to run persistently without a terminal, or when
   dsh web is down and needs to be brought back up inside tmux.
-version: 1.1.7
+version: 1.1.8
 license: MIT
 metadata:
   dsh:
@@ -270,3 +270,7 @@ bash <skill_dir>/scripts/dsh-web.sh watchdog-off    # 关闭
     `dsh-web restart` 一键恢复规范托管。**托管后一律用 `dsh-web start`/
     `restart`/`status`，不要手动 `dsh web`**（要开新的用 `dsh-web attach` 或直接
     访问 3080）。
+12. **裸进程托管（run-loop 丢失）** → 崩溃自动重启失效。✅ **看门狗会自动检测并
+    修复**（30s 内停裸进程 → 同会话 run-loop 拉起，带 5 分钟冷却）；想立即修用
+    `dsh-web heal`。修复 = 一次安全重启，agent 会话会断一次（tmux server 独立
+    执行，调用方被杀也能完成）。

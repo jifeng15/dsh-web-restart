@@ -121,6 +121,7 @@ dsh-web upgrade    # Upgrade the dsh package itself, then auto-restart
 dsh-web start      # Start / auto-takeover (create session if none, migrate into tmux if unmanaged)
 dsh-web stop       # Stop (Ctrl-C; tmux hosting stays, `restart` brings it back)
 dsh-web quit       # Quit fully: stop + close the tmux hosting session + clean up (nothing in the background)
+dsh-web heal       # Fix bare hosting (run-loop lost): re-host under run-loop (= one safe restart, brief disconnect)
 dsh-web status     # Check session/port/PID/logs
 dsh-web session    # Report the resolved tmux session (auto-discovered, never assumes `dsh-web`)
 dsh-web attach     # Enter tmux for troubleshooting
@@ -256,7 +257,9 @@ auto-reconciled before the next boot — no manual cleanup needed.
    **interrupts any agent session running inside it** — run it when convenient,
    or let the next session do it. Afterward verify with `dsh-web status` that
    **run-loop is in the parent chain** (crash auto-restart is back; otherwise
-   the web is only hosted by a bare process).
+   the web is only hosted by a bare process). **Bare hosting is auto-repaired**:
+   the watchdog detects it and fixes it back to run-loop hosting within 30s
+   (also a brief disconnect); `dsh-web heal` fixes it immediately.
 
 ## Known issues / optional tweaks
 
@@ -282,6 +285,17 @@ auto-reconciled before the next boot — no manual cleanup needed.
 MIT
 
 ## Changelog
+
+### v2.0.10 (bare-hosting auto-repair)
+
+- 💊 The watchdog now detects **bare hosting** (web in the hosted session but
+  run-loop lost — crash auto-restart gone) and auto-repairs it back to run-loop
+  hosting (stop bare process → wait for port → relaunch under run-loop in the
+  same session), with a 5-minute cooldown to avoid repeated disruptions. The
+  repair is one safe restart (the agent session is interrupted once).
+- ✨ New `dsh-web heal`: trigger the same repair manually (no cooldown).
+- ✅ Verified in isolation: bare hosting auto-repaired (pane relaunched via the
+  run-loop path), proper hosting untouched, heal command chain works.
 
 ### v2.0.9 (double-launch self-heal — resume suspended instances)
 

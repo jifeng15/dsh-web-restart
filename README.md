@@ -120,6 +120,7 @@ dsh-web upgrade    # 升级 dsh 本体并自动重启
 dsh-web start      # 启动/自动接管（无会话则创建，未托管则迁入 tmux）
 dsh-web stop       # 停止（Ctrl-C；tmux 托管保留，`restart` 可快速恢复）
 dsh-web quit       # 彻底退出：停止 + 关闭托管会话 + 清理痕迹（不再挂后台）
+dsh-web heal       # 修复裸进程托管（run-loop 丢失时恢复规范托管；= 一次安全重启，会断一次）
 dsh-web status     # 查看会话/端口/PID/日志
 dsh-web session    # 查看实际 tmux 会话名（自动发现，不假设 dsh-web）
 dsh-web attach     # 进入 tmux 排查
@@ -257,7 +258,8 @@ dsh-web.sh restart
    ⚠️ **跑 `restart` 前请知悉**：重启会**短暂断开 web、中断正在其中运行的
    agent 会话**——等方便时再跑，或让下一个会话帮你执行。跑完用
    `dsh-web status` 验证 **run-loop 出现在父进程链里**（说明崩溃自动重启已恢复，
-   否则只是裸进程托管）。
+   否则只是裸进程托管）。**裸进程托管不用手动管**：看门狗会自动检测并在 30s 内
+   修复回 run-loop 托管（也会断一次）；想立即修就 `dsh-web heal`。
 
 ## 已知问题 / 可选处理
 
@@ -281,6 +283,16 @@ dsh-web.sh restart
 MIT
 
 ## 更新记录
+
+### v2.0.10（裸进程托管自动修复）
+
+- 💊 看门狗新增自愈：检测**裸进程托管**（在托管会话里但 run-loop 丢失，崩溃自动
+  重启失效）→ 自动修复为 run-loop 托管（停裸进程 → 等端口释放 → 同会话
+  run-loop 拉起），带 5 分钟冷却避免反复打扰。修复即一次安全重启（agent 会话
+  会断一次）。
+- ✨ 新增 `dsh-web heal`：手动触发同一修复（无冷却限制）。
+- ✅ 隔离实测：裸托管自动修复（pane 用 run-loop 路径拉起）、规范托管不误伤、
+  heal 命令链路（裸进程被修掉）。
 
 ### v2.0.9（双启动自愈）
 
