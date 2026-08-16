@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url'
 import {
   installBundle,
   listBundles,
+  selfHeal,
   setEnabled,
   uninstallBundle,
   updateBundle,
@@ -148,6 +149,17 @@ export function apply(ctx) {
     console.log('[dsh-web-hot] webServer injected, mounting routes')
     hostCtx.effect(() => {
       console.log('[dsh-web-hot] effect running, registering', ROUTE_PREFIX)
+      // Self-heal: if a hot-managed bundle was later adopted by
+      // dsh.profile.bundles (external takeover), drop its patch rows now so
+      // the next boot can't crash with `duplicate loader entry id`. Never
+      // blocks plugin start; the bash preflight covers the boot path too.
+      selfHeal(hostCtx, profileDir)
+        .then((result) => {
+          console.log('[dsh-web-hot] selfHeal:', result.healed.length > 0 ? result.message : 'nothing to heal')
+        })
+        .catch((error) => {
+          console.warn('[dsh-web-hot] selfHeal failed:', error)
+        })
       return mountRoutes(hostCtx, profileDir)
     }, 'dsh-web-hot: http routes')
   })

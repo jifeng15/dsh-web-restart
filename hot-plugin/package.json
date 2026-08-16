@@ -1,7 +1,7 @@
 {
   "name": "dsh-web-hot",
-  "version": "0.1.0",
-  "description": "Hot plugin lifecycle for DeepSeek Harness web: install/uninstall/update/enable-disable bundles without restart. Host plugin for the dsh-web-restart skill.",
+  "version": "0.1.1",
+  "description": "Hot plugin lifecycle for DeepSeek Harness web: install/uninstall/update/enable-disable bundles without restart. Host plugin for the dsh-web-restart skill. Includes startup self-heal (external takeover → drop patch rows).",
   "type": "module",
   "main": "index.js",
   "exports": {

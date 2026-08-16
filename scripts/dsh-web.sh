@@ -17,6 +17,9 @@
 #   dsh-web.sh status    查看状态（会话 / 端口 / PID）
 #   dsh-web.sh attach    进入 tmux 会话（手动排查用）
 #   dsh-web.sh report-port  把实际端口写入 last-port.txt 并发系统通知
+#   dsh-web.sh health-check  检查端口与配置树（区分进程问题/配置问题）
+#   dsh-web.sh repair        修复配置（同文件重复 id / ghost bundle / 跨来源重复）
+#   dsh-web.sh preflight     boot 前自检（start/restart 自动执行；清跨来源重复）
 #   dsh-web.sh autostart-on  启用开机自启（launchd/systemd，默认关闭，用户自选）
 #   dsh-web.sh autostart-off 关闭开机自启
 #   dsh-web.sh autostart-status  查看自启状态
@@ -45,6 +48,15 @@ LOG_DIR="${DSH_LOG_DIR:-$HOME/.dsh/logs}"
 
 log()  { echo "==> $*"; }
 die()  { echo "!! $*" >&2; exit 1; }
+
+# profile 目录：DSH_PROFILE_DIR 显式覆盖 > $HOME/.dsh/profiles/${PROFILE:-web}
+profile_dir() {
+  if [ -n "${DSH_PROFILE_DIR:-}" ]; then
+    printf '%s' "${DSH_PROFILE_DIR}"
+  else
+    printf '%s' "$HOME/.dsh/profiles/${PROFILE:-web}"
+  fi
+}
 
 # 找出疑似 dsh web 的进程 PID 列表（ps 优先，pgrep 兜底；macOS 的 pgrep -f 对带空格模式不可靠）
 dsh_web_pids() {
@@ -198,8 +210,11 @@ migrate_into_tmux() {
   fi
   log "检测到未被托管的 dsh web（PID ${pid}，端口 ${PORT}），正在自动迁入 tmux..."
   create_session
-  # 由 tmux server 执行，调用方（agent/终端）被杀也不影响迁移完成
-  tmux run-shell -b "sleep 2; kill -TERM ${pid} 2>/dev/null; sleep 2; tmux send-keys -t ${SESSION} C-c; sleep 1; tmux send-keys -t ${SESSION} '$(crash_loop_cmd)' Enter; echo \"dsh-web migrated \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
+  # 由 tmux server 执行，调用方（agent/终端）被杀也不影响迁移完成；
+  # 拉起前先跑 preflight（清跨来源重复），防止新进程起不来。
+  local self
+  self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dsh-web.sh"
+  tmux run-shell -b "sleep 2; kill -TERM ${pid} 2>/dev/null; sleep 2; tmux send-keys -t ${SESSION} C-c; sleep 1; ${self} preflight >/dev/null 2>&1 || true; tmux send-keys -t ${SESSION} '$(crash_loop_cmd)' Enter; echo \"dsh-web migrated \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
   log "已排定迁移：旧进程停止后 dsh web 将在 tmux 会话 ${SESSION} 中重启（5-8 秒）"
   return 0
 }
@@ -262,6 +277,7 @@ report_port() {
 
 cmd_start() {
   mkdir -p "${LOG_DIR}"
+  cmd_preflight   # boot 前自检：先清跨来源重复（duplicate loader entry id 的根源），再启动
   resolve_session || true   # 找不到 dsh-web 时自动发现托管会话
   if has_session; then
     log "tmux 会话 ${SESSION} 已存在（若 dsh web 未运行，请用 restart）"
@@ -293,9 +309,13 @@ cmd_restart() {
   fi
   # 关键：由 tmux server 独立执行延迟重启。
   # - 调用方（agent 会话 / 终端）即使被杀，tmux server 仍会完成 C-c 与重新启动。
-  # - 不要在括号内用 $SESSION 外层展开出问题：tmux run-shell 以 server 环境执行。
+  # - 重启前先跑 preflight（boot 前自检，清跨来源重复），防止新进程因
+  #   duplicate loader entry id 起不来——自检由 tmux server 独立执行，
+  #   调用方被杀也不影响。
+  local self
+  self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dsh-web.sh"
   log "由 tmux server 排定自动重启（会话 ${SESSION}，约 5-8 秒完成，页面会短暂断开）"
-  tmux run-shell -b "sleep 3; tmux send-keys -t ${SESSION} C-c; sleep 2; tmux send-keys -t ${SESSION} '$(crash_loop_cmd)' Enter; echo \"dsh-web restarted \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
+  tmux run-shell -b "sleep 3; tmux send-keys -t ${SESSION} C-c; sleep 2; ${self} preflight >/dev/null 2>&1 || true; tmux send-keys -t ${SESSION} '$(crash_loop_cmd)' Enter; echo \"dsh-web restarted \$(date '+%H:%M:%S')\" >> ${LOG_DIR}/auto-restart.log"
   # 延迟健康检查：等重启完成后验证端口与配置树，区分进程/配置问题
   ( sleep 10; "${BASH_SOURCE[0]}" health-check ) >/dev/null 2>&1 &
   # 延迟探测重启后的实际端口（等 6 秒新进程接管），写入 last-port.txt 并通知
@@ -318,7 +338,7 @@ cmd_health_check() {
     log "⚠️ 端口 ${PORT} 未就绪——进程可能未启动"
   fi
   if [ "${config_ok}" != "yes" ]; then
-    log "⚠️ 配置树校验失败（--dump-config 报错）——可能是配置损坏（如 cordis.patch.yml 重复行 / YAML 错误 / ghost bundle）"
+    log "⚠️ 配置树校验失败（--dump-config 报错）——可能是配置损坏（如 cordis.patch.yml 重复行 / YAML 错误 / ghost bundle / 跨来源重复）"
     log "   → 用 'dsh-web repair' 诊断并修复配置，不要反复 restart"
   fi
   if [ "${port_ok}" != "yes" ] && [ "${config_ok}" != "yes" ]; then
@@ -330,10 +350,11 @@ cmd_health_check() {
 # 自动备份 profile 配置（cordis.patch.yml / state.json / pnpm-workspace.yaml）。
 # 任何修改配置的操作前调用；备份到 profile/backups/，保留最近 N 份。
 config_backup() {
-  local profile_dir="$HOME/.dsh/profiles/${PROFILE:-web}"
-  local backup_dir="${profile_dir}/backups"
+  local profile_dir backup_dir ts
+  profile_dir="$(profile_dir)"
+  backup_dir="${profile_dir}/backups"
   mkdir -p "${backup_dir}"
-  local ts="$(date +%Y%m%d-%H%M%S)"
+  ts="$(date +%Y%m%d-%H%M%S)"
   for f in cordis.patch.yml dsh-web-hot.state.json pnpm-workspace.yaml; do
     if [ -f "${profile_dir}/${f}" ]; then
       cp "${profile_dir}/${f}" "${backup_dir}/${f}.${ts}.bak"
@@ -345,15 +366,183 @@ config_backup() {
   log "配置已备份到 ${backup_dir}（时间戳 ${ts}）"
 }
 
+# 跨来源重复检测：bundles 声明的 entry id（读各 bundle 的 dsh.bundle.patch）
+# ∩ cordis.patch.yml 的 entry id。输出冲突 id（换行分隔）；无冲突输出为空。
+# 这是「duplicate loader entry id」崩溃的最常见根源：同一插件既在
+# dsh.profile.bundles（dsh plugin CLI 管理，自带 patch 自动挂载）又被
+# dsh-web-hot 热装写进了用户 patch 层 → loader 里出现两个同名 entry。
+cross_source_conflicts() {
+  local profile_dir pkg_file patch_file
+  profile_dir="$(profile_dir)"
+  pkg_file="${profile_dir}/package.json"
+  patch_file="${profile_dir}/cordis.patch.yml"
+  [ -f "${pkg_file}" ] || return 0
+  [ -f "${patch_file}" ] || return 0
+  python3 - "${pkg_file}" "${profile_dir}" "${patch_file}" <<'PYEOF'
+import json, os, re, sys
+pkg_path, profile_dir, patch_path = sys.argv[1], sys.argv[2], sys.argv[3]
+ID_RE = re.compile(r'^\s*-?\s*id:\s*([A-Za-z0-9._-]+)')
+
+def entry_ids(path):
+    ids = set()
+    try:
+        with open(path, encoding='utf-8') as f:
+            for line in f:
+                m = ID_RE.match(line)
+                if m:
+                    ids.add(m.group(1))
+    except OSError:
+        pass
+    return ids
+
+try:
+    with open(pkg_path, encoding='utf-8') as f:
+        pkg = json.load(f)
+except (OSError, ValueError):
+    sys.exit(0)
+bundles = (pkg.get('dsh') or {}).get('profile', {}).get('bundles') or []
+bundle_ids = set()
+for name in bundles:
+    if not isinstance(name, str):
+        continue
+    pkg_dir = os.path.join(profile_dir, 'node_modules', name)
+    try:
+        with open(os.path.join(pkg_dir, 'package.json'), encoding='utf-8') as f:
+            manifest = json.load(f)
+    except (OSError, ValueError):
+        continue
+    patch_rel = ((manifest.get('dsh') or {}).get('bundle') or {}).get('patch')
+    if not patch_rel:
+        continue
+    bundle_ids |= entry_ids(os.path.join(pkg_dir, patch_rel))
+conflicts = sorted(bundle_ids & entry_ids(patch_path))
+if conflicts:
+    print('\n'.join(conflicts))
+PYEOF
+}
+
+# 修复跨来源重复：以 bundles 侧为权威（CLI 管理的持久来源），从
+# cordis.patch.yml 移除冲突行并同步 state.json。改前自动备份。
+# 返回 0=无需修复或已修复；1=修复失败。
+fix_cross_source() {
+  local profile_dir pkg_file patch_file state_file conflicts
+  profile_dir="$(profile_dir)"
+  pkg_file="${profile_dir}/package.json"
+  patch_file="${profile_dir}/cordis.patch.yml"
+  state_file="${profile_dir}/dsh-web-hot.state.json"
+  [ -f "${pkg_file}" ] || return 0
+  [ -f "${patch_file}" ] || return 0
+  conflicts="$(cross_source_conflicts)"
+  [ -n "${conflicts}" ] || return 0
+  log "检测到跨来源重复 entry id：$(printf '%s' "${conflicts}" | tr '\n' ' ')"
+  log "  → 同一插件同时存在于 dsh.profile.bundles 与 cordis.patch.yml（duplicate loader entry id 的根源）"
+  log "  → 以 bundles 侧为权威，从 cordis.patch.yml 移除重复行；以后增删改走 'dsh plugin --profile web add|remove'"
+  config_backup
+  python3 - "${patch_file}" "${state_file}" ${conflicts} <<'PYEOF'
+import json, re, sys
+patch_path, state_path = sys.argv[1], sys.argv[2]
+bad = set(sys.argv[3:])
+ID_RE = re.compile(r'^\s*-?\s*id:\s*([A-Za-z0-9._-]+)')
+
+with open(patch_path, encoding='utf-8') as f:
+    lines = f.readlines()
+out = []
+i = 0
+while i < len(lines):
+    line = lines[i]
+    if re.match(r'^\s*-\s*insert:\s*$', line):
+        j = i + 1
+        block = [line]
+        while j < len(lines) and (lines[j].startswith(' ') or lines[j].startswith('\t')):
+            block.append(lines[j]); j += 1
+        # 按条目分组（每个 `- ` 开头的行为一个新条目），删除 id 冲突的条目
+        entries, current = [], []
+        for bl in block[1:]:
+            if re.match(r'^\s*-\s+', bl):
+                if current:
+                    entries.append(current)
+                current = [bl]
+            else:
+                current.append(bl)
+        if current:
+            entries.append(current)
+        kept = []
+        for ent in entries:
+            m = ID_RE.match(ent[0])
+            if m and m.group(1) in bad:
+                continue
+            kept.extend(ent)
+        if kept:
+            out.append(block[0])
+            out.extend(kept)
+        i = j
+    elif ID_RE.match(line):
+        m = ID_RE.match(line)
+        if m.group(1) in bad:
+            i += 1
+            # 连同行删除（如 `- id: foo` 下的 `  disabled: true` 续行）
+            while i < len(lines) and (lines[i].startswith(' ') or lines[i].startswith('\t')) and not re.match(r'^\s*-\s', lines[i]):
+                i += 1
+            continue
+        out.append(line)
+        i += 1
+    else:
+        out.append(line)
+        i += 1
+
+# 若 patch 层已无任何行，写回标准空数组（保持 yaml 合法）
+if not any(re.match(r'^\s*-\s', l) for l in out):
+    out = ['# Rows managed by dsh-web-hot — edit or remove freely, or uninstall the bundle.\n', '[]\n']
+with open(patch_path, 'w', encoding='utf-8') as f:
+    f.writelines(out)
+print('已从 cordis.patch.yml 移除冲突 id 所在行:', sorted(bad))
+
+# 同步 state.json：移除被收编 bundle 的记录与 disables 键
+try:
+    with open(state_path, encoding='utf-8') as f:
+        state = json.load(f)
+except (OSError, ValueError):
+    state = {'bundles': [], 'disables': {}}
+if isinstance(state, dict):
+    state.setdefault('bundles', [])
+    state.setdefault('disables', {})
+    state['bundles'] = [b for b in state['bundles'] if not (set(b.get('rowIds', [])) & bad)]
+    for k in list(state['disables']):
+        if k in bad:
+            del state['disables'][k]
+    with open(state_path, 'w', encoding='utf-8') as f:
+        json.dump(state, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+    print('已同步 dsh-web-hot.state.json（移除被收编 bundle 的记录）')
+PYEOF
+  local rc=$?
+  if [ "${rc}" != "0" ]; then
+    log "⚠️ 跨来源修复失败（rc=${rc}）——请手动检查 ${patch_file}，备份在 ${profile_dir}/backups/"
+    return 1
+  fi
+  log "✅ 跨来源重复已修复：patch 层让位，bundle 侧保持挂载（重启后正常合成）"
+}
+
+# boot 前自检：修复跨来源重复，防止下一次启动因 duplicate loader entry id 崩溃。
+# start/restart 自动调用；也可手动跑。始终退出 0（自愈失败不阻塞启动）。
+cmd_preflight() {
+  fix_cross_source
+  return 0
+}
+
 # 修复配置：诊断常见损坏并尝试自动修复，改前自动备份，修复后验证。
 cmd_repair() {
-  local profile_dir="$HOME/.dsh/profiles/${PROFILE:-web}"
-  local patch_file="${profile_dir}/cordis.patch.yml"
-  local state_file="${profile_dir}/dsh-web-hot.state.json"
-  local pkg_file="${profile_dir}/package.json"
+  local profile_dir patch_file state_file pkg_file config_ok=no
+  profile_dir="$(profile_dir)"
+  patch_file="${profile_dir}/cordis.patch.yml"
+  state_file="${profile_dir}/dsh-web-hot.state.json"
+  pkg_file="${profile_dir}/package.json"
 
   log "=== dsh-web repair：诊断配置 ==="
-  local config_ok=no
+  # 诊断 0：跨来源重复（bundles 声明的 entry id ∩ patch 层）——duplicate
+  # loader entry id 崩溃的最常见根源，无论配置树是否正常都先查并修。
+  fix_cross_source || return 1
+
   if dsh --profile "${PROFILE:-web}" --dump-config >/dev/null 2>&1; then config_ok=yes; fi
   if [ "${config_ok}" = "yes" ]; then
     log "配置树正常（--dump-config 通过）——无需修复"
@@ -706,6 +895,7 @@ case "${1:-}" in
   remove)  cmd_remove "${2:-}" ;;
   repair)  cmd_repair ;;
   health-check) cmd_health_check ;;
+  preflight) cmd_preflight ;;
   report-port) report_port ;;
   autostart-on) autostart_on ;;
   autostart-off) autostart_off ;;
@@ -714,5 +904,5 @@ case "${1:-}" in
   status)  cmd_status ;;
   session) cmd_session ;;
   attach)  cmd_attach ;;
-  *) die "用法: dsh-web.sh {start|restart|install|remove|reload|upgrade|repair|health-check|stop|status|session|attach}" ;;
+  *) die "用法: dsh-web.sh {start|restart|install|remove|reload|upgrade|repair|health-check|preflight|stop|status|session|attach}" ;;
 esac

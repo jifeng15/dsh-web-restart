@@ -206,6 +206,11 @@ function withoutBundle(state, packageName) {
   return { ...state, bundles: state.bundles.filter((b) => b.packageName !== packageName) }
 }
 
+function withoutBundles(state, packageNames) {
+  const set = new Set(packageNames)
+  return { ...state, bundles: state.bundles.filter((b) => !set.has(b.packageName)) }
+}
+
 function replaceBundle(state, packageName, bundle) {
   return { ...state, bundles: state.bundles.map((b) => (b.packageName === packageName ? bundle : b)) }
 }
@@ -577,6 +582,37 @@ export async function setEnabled(ctx, profileDir, entryId, enabled) {
   const failed = await applyToInclude(ctx, new Set([entryId]), enabled ? [] : [disableRow], 'id-rows')
   if (failed !== undefined) return { ok: false, message: failed }
   return { ok: true, message: enabled ? `enabled ${entryId}` : `disabled ${entryId}` }
+}
+
+/**
+ * Startup/periodic self-heal: when a bundle we hot-managed has since been
+ * adopted by `dsh.profile.bundles` (external takeover, e.g. via `dsh plugin
+ * add`), drop its patch-layer rows and state records so the next boot cannot
+ * crash with `duplicate loader entry id`. Safe no-op when there is nothing to
+ * heal. The bash half (dsh-web.sh preflight) runs the same check before every
+ * boot; this covers running-process drift (HMR reloads, manual state edits)
+ * so the next boot is clean even if preflight never ran.
+ */
+export async function selfHeal(ctx, profileDir) {
+  const state = readState(profileDir)
+  if (state.bundles.length === 0) return { ok: true, healed: [] }
+  const profileBundles = readProfileBundles(profileDir)
+  const taken = state.bundles.filter((bundle) => profileBundles.includes(bundle.packageName))
+  if (taken.length === 0) return { ok: true, healed: [] }
+  const names = taken.map((bundle) => bundle.packageName)
+  const keys = new Set(taken.flatMap((bundle) => bundle.rowIds))
+  const patchFile = join(profileDir, PROFILE_PATCH_FILENAME)
+  writeState(profileDir, withoutDisables(withoutBundles(state, names), [...keys]))
+  writeUserLayer(patchFile, withoutRows(readUserLayer(patchFile), keys))
+  const failed = await applyToInclude(ctx, keys, [])
+  if (failed !== undefined) {
+    return { ok: false, healed: names, message: failed }
+  }
+  return {
+    ok: true,
+    healed: names,
+    message: `external takeover: ${names.join(', ')} now managed by dsh.profile.bundles — patch rows dropped`,
+  }
 }
 
 /* ------------------------------------------------------------------ */
