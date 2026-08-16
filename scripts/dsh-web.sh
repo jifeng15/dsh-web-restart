@@ -950,6 +950,14 @@ watchdog_off() {
 # 看门狗单次检测（由 launchd 每 30s 调用；也可手动跑）。
 # 端口有 dsh web 但不在 tmux 托管 → 自动迁入 tmux。绝不主动启动停止的 web。
 cmd_watchdog_tick() {
+  # 自愈 0：若存在处于 stopped（T）状态的 dsh web 进程（双启动可能把旧实例
+  # 挂起——新实例抢端口失败，旧实例被干扰后进入暂停），发送 SIGCONT 恢复。
+  # 仅作用于真正暂停的进程，对正常运行进程零副作用。
+  local stopped p
+  stopped="$(ps -axo pid,stat,command 2>/dev/null | awk '$2 ~ /^T/ && $0 ~ /dsh web/ {print $1}' | head -5)"
+  for p in ${stopped}; do
+    kill -CONT "${p}" 2>/dev/null && log "watchdog：已恢复被暂停的 dsh web 进程（PID ${p}）"
+  done
   if ! is_listening; then return 0; fi          # web 没在跑 → 无事可做
   if resolve_session >/dev/null 2>&1; then return 0; fi  # 已在 tmux 托管 → 无事可做
   log "watchdog：检测到未托管的 dsh web（端口 ${PORT}），自动迁入 tmux..."

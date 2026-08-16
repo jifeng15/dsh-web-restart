@@ -9,7 +9,7 @@ description: >
   removing plugins, after editing profile config (cordis.patch.yml), after upgrading
   the dsh package, when dsh web needs to run persistently without a terminal, or when
   dsh web is down and needs to be brought back up inside tmux.
-version: 1.1.6
+version: 1.1.7
 license: MIT
 metadata:
   dsh:
@@ -264,3 +264,9 @@ bash <skill_dir>/scripts/dsh-web.sh watchdog-off    # 关闭
     start`/`restart` 才会被迁入 tmux；从不跑脚本直接关终端，进程会随终端退出
     （SIGHUP）。✅ 可选 `dsh-web watchdog-on` 启用 launchd 看门狗后即「真·自动」：
     任何方式启动都会在 30s 内被迁入 tmux，关终端不影响。
+11. **已托管后手动再敲 `dsh web`（双启动）** → 新实例抢端口失败
+    （EADDRINUSE），旧实例可能被挂起、run-loop 收到信号退出（托管拓扑退化，
+    崩溃自动重启丢失）。✅ 看门狗每 30s 自动 SIGCONT 恢复被暂停的实例；误敲后
+    `dsh-web restart` 一键恢复规范托管。**托管后一律用 `dsh-web start`/
+    `restart`/`status`，不要手动 `dsh web`**（要开新的用 `dsh-web attach` 或直接
+    访问 3080）。

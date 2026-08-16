@@ -6,7 +6,7 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.8-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.9-4d6bfe)
 
 **English** | [简体中文](README.zh-CN.md)
 
@@ -251,12 +251,21 @@ auto-reconciled before the next boot — no manual cleanup needed.
 1. Synchronous restart = kills the host process = command interrupted → use `tmux run-shell -b`
 2. `nohup ... &` background tasks get cleaned up when the caller's turn ends → use tmux server
 3. GitHub tarball URL plugin installs leave pnpm lockfile missing `integrity` → use `github:owner/repo#ref`
+4. **Running `dsh web` again while it's already hosted** — the second instance can't bind the port (`EADDRINUSE`), and the hosted one can end up suspended (run-loop exits on the signal). Don't double-launch: use `dsh-web start`/`restart`/`status`. If it happened anyway: the watchdog auto-resumes suspended instances within 30s, and `dsh-web restart` restores proper hosting.
 
 ## License
 
 MIT
 
 ## Changelog
+
+### v2.0.9 (double-launch self-heal — resume suspended instances)
+
+- 💊 The watchdog now **resumes suspended dsh web processes** (SIGCONT) on every
+  tick. If you accidentally run `dsh web` again while it's already tmux-hosted,
+  the new instance fails on the busy port and the hosted one can end up
+  suspended — the watchdog brings it back within 30s. Recovery guidance:
+  `dsh-web restart` restores proper run-loop hosting.
 
 ### v2.0.8 (quit — fully stop, nothing stays in the background)
 

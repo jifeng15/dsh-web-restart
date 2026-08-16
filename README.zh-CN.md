@@ -6,7 +6,7 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.8-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.9-4d6bfe)
 
 **简体中文** | [English](README.md)
 
@@ -250,12 +250,22 @@ dsh-web.sh restart
 1. 同步重启 = 杀宿主进程 = 命令中断 → 用 `tmux run-shell -b`
 2. `nohup ... &` 排定后台任务会被调用方回合清理 → 用 tmux server
 3. GitHub tarball URL 装插件会让 pnpm 锁文件缺 integrity → 用 `github:owner/repo#ref`
+4. **已托管时手动再敲 `dsh web`（双启动）** → 新实例抢端口失败（EADDRINUSE），
+   旧实例可能被挂起（run-loop 收到信号退出）。别双启动：用 `dsh-web start`/
+   `restart`/`status`。误敲了也别慌：看门狗 30s 内自动恢复被暂停的实例，
+   `dsh-web restart` 一键恢复规范托管。
 
 ## License
 
 MIT
 
 ## 更新记录
+
+### v2.0.9（双启动自愈）
+
+- 💊 看门狗现在**自动恢复被暂停的 dsh web 进程**（SIGCONT，每轮 tick）。如果你在
+  已托管时误敲 `dsh web`，新实例抢端口失败（EADDRINUSE）、旧实例可能被挂起——
+  看门狗 30s 内把它恢复。恢复指引：`dsh-web restart` 重建规范托管。
 
 ### v2.0.8（quit 彻底退出）
 
