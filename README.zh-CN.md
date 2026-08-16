@@ -6,7 +6,7 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.7-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.8-4d6bfe)
 
 **简体中文** | [English](README.md)
 
@@ -116,7 +116,8 @@ dsh-web install <spec>   # ★ 装插件：热装优先（免重启），失败�
 dsh-web remove <pkg>     # ★ 卸插件：热卸优先（免重启），失败回退安全重启（拒绝 CLI 管理的插件——请用 `dsh plugin --profile web remove`）
 dsh-web restart    # ★ 兜底/其他：装插件后、改配置、升级本体等场景统一安全重启
 dsh-web start      # 启动/自动接管（无会话则创建，未托管则迁入 tmux）
-dsh-web stop       # 停止
+dsh-web stop       # 停止（Ctrl-C；tmux 托管保留，`restart` 可快速恢复）
+dsh-web quit       # 彻底退出：停止 + 关闭托管会话 + 清理痕迹（不再挂后台）
 dsh-web status     # 查看会话/端口/PID/日志
 dsh-web session    # 查看实际 tmux 会话名（自动发现，不假设 dsh-web）
 dsh-web attach     # 进入 tmux 排查
@@ -252,6 +253,13 @@ dsh-web.sh restart
 MIT
 
 ## 更新记录
+
+### v2.0.8（quit 彻底退出）
+
+- 🚪 **`dsh-web quit`**：彻底退出——停止 dsh web（C-c，兜底 TERM）＋**关闭 tmux
+  托管会话**＋清理痕迹（crash-count），系统里不再挂任何 dsh web 相关进程/会话。
+  `stop` 只发 Ctrl-C（托管保留，`restart` 快速恢复）；`quit` 是"不干了"的出口。
+  看门狗在运行时会提示（它只迁移运行中的 web，不会自动重启已停止的）。
 
 ### v2.0.7（与 dsh-market 共存兼容）
 

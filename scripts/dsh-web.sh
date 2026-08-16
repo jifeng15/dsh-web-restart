@@ -13,7 +13,8 @@
 #   dsh-web.sh restart   安全自动重启（推荐给 agent 调用，由 tmux server 执行）
 #   dsh-web.sh reload    改完 profile 配置（cordis.patch.yml）后重启生效（= restart）
 #   dsh-web.sh upgrade   升级 dsh 本体（npm 全局）后自动重启生效
-#   dsh-web.sh stop      停止 dsh web
+#   dsh-web.sh stop      停止 dsh web（Ctrl-C；tmux 托管保留，可 restart 恢复）
+#   dsh-web.sh quit      彻底退出（停止 + 关闭托管会话 + 清理痕迹，不再挂在后台）
 #   dsh-web.sh status    查看状态（会话 / 端口 / PID）
 #   dsh-web.sh attach    进入 tmux 会话（手动排查用）
 #   dsh-web.sh report-port  把实际端口写入 last-port.txt 并发系统通知
@@ -668,6 +669,49 @@ cmd_stop() {
   fi
 }
 
+# 彻底退出：停 dsh web + 关闭托管会话 + 清理痕迹，让系统里不再有 dsh web 相关
+# 进程/会话。与 stop 的区别：stop 只发 Ctrl-C（run-loop 识别信号退出、不重启，
+# 但 tmux 会话和 pane 还在）；quit 停完还关掉 tmux 托管会话并清理 crash-count。
+cmd_quit() {
+  resolve_session || true
+  if has_session; then
+    log "停止 dsh web（托管会话 ${SESSION}）..."
+    tmux send-keys -t "${SESSION}" C-c
+    sleep 3
+    # 兜底：进程仍在监听（优雅退出慢 / run-loop 重启间隙）→ 直接 TERM
+    if is_listening; then
+      local pid
+      pid="$(port_pid)"
+      if [ -n "${pid}" ]; then
+        kill -TERM "${pid}" 2>/dev/null && log "已向 PID ${pid} 发送 TERM"
+        sleep 2
+      fi
+    fi
+    tmux kill-session -t "${SESSION}" 2>/dev/null
+    log "托管会话 ${SESSION} 已关闭"
+  else
+    if is_listening; then
+      local pid
+      pid="$(port_pid)"
+      log "检测到未托管的 dsh web（PID ${pid}），正在停止..."
+      kill -TERM "${pid}" 2>/dev/null
+      sleep 2
+    else
+      log "dsh web 未在运行"
+    fi
+  fi
+  rm -f "${DSH_CRASH_COUNT_FILE:-$HOME/.dsh/logs/crash-count}" 2>/dev/null || true
+  if is_listening; then
+    log "⚠️ 端口 ${PORT} 仍在监听——请手动检查，或再执行一次 quit"
+    return 1
+  fi
+  log "✅ dsh web 已完全退出（端口 ${PORT} 已释放），不再有托管会话"
+  if [ "$(uname -s)" = "Darwin" ] && [ -f "$HOME/Library/LaunchAgents/${WATCHDOG_LABEL}.plist" ]; then
+    log "  提示：看门狗仍在运行（每 30s 检测）；它只迁移运行中的 web，不会自动重启已停止的"
+    log "        彻底禁用用: dsh-web watchdog-off"
+  fi
+}
+
 # 修改 profile 配置（cordis.patch.yml 等）后重启生效。配置在启动时合成，
 # 没有热重载，必须重启；本命令与 restart 等价，但语义更清晰。
 cmd_reload() {
@@ -1010,8 +1054,9 @@ case "${1:-}" in
   autostart-off) autostart_off ;;
   autostart-status) autostart_status ;;
   stop)    cmd_stop ;;
+  quit)    cmd_quit ;;
   status)  cmd_status ;;
   session) cmd_session ;;
   attach)  cmd_attach ;;
-  *) die "用法: dsh-web.sh {start|restart|install|remove|reload|upgrade|repair|health-check|preflight|watchdog-on|watchdog-off|watchdog-status|stop|status|session|attach}" ;;
+  *) die "用法: dsh-web.sh {start|restart|install|remove|reload|upgrade|repair|health-check|preflight|watchdog-on|watchdog-off|watchdog-status|stop|quit|status|session|attach}" ;;
 esac

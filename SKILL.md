@@ -9,7 +9,7 @@ description: >
   removing plugins, after editing profile config (cordis.patch.yml), after upgrading
   the dsh package, when dsh web needs to run persistently without a terminal, or when
   dsh web is down and needs to be brought back up inside tmux.
-version: 1.1.5
+version: 1.1.6
 license: MIT
 metadata:
   dsh:
@@ -177,13 +177,19 @@ bash <skill_dir>/scripts/dsh-web.sh upgrade
 自动检测安装方式（npm 全局 / pnpm 全局），执行 `@deepseek-ai/dsh@latest` 升级，
 然后自动重启加载新版本。非 npm/pnpm 安装（源码、其他方式）时只提示手动升级。
 
-### 查看状态 / 停止 / 进入排查
+### 查看状态 / 停止 / 彻底退出 / 进入排查
 
 ```bash
 bash <skill_dir>/scripts/dsh-web.sh status   # 会话 / 端口 / PID / 日志
-bash <skill_dir>/scripts/dsh-web.sh stop     # Ctrl-C 停止
+bash <skill_dir>/scripts/dsh-web.sh stop     # 停止（Ctrl-C；托管会话保留，restart 快速恢复）
+bash <skill_dir>/scripts/dsh-web.sh quit     # 彻底退出：停止 + 关闭托管会话 + 清理痕迹，不再挂后台
 bash <skill_dir>/scripts/dsh-web.sh attach   # tmux attach 进去看实时日志
 ```
+
+> `stop` 与 `quit`：stop 只是停 dsh web（run-loop 识别 Ctrl-C 不重启，但 tmux
+> 托管还在，`restart` 能秒回）；quit 是"不干了"的出口——连托管会话一起关掉，
+> 系统里不留任何 dsh web 进程/会话。quit 后若看门狗还在运行会提示（它不会
+> 自动重启已停止的 web；彻底禁用用 `dsh-web watchdog-off`）。
 
 ### 看门狗：任何方式启动都自动托管（可选，默认关）
 

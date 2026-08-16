@@ -6,7 +6,7 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.7-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.8-4d6bfe)
 
 **English** | [简体中文](README.zh-CN.md)
 
@@ -117,7 +117,8 @@ dsh-web install <spec>   # ★ Install plugin: hot install (no restart) if avail
 dsh-web remove <pkg>     # ★ Remove plugin: hot uninstall if available, else safe restart (refuses CLI-managed — use `dsh plugin --profile web remove`)
 dsh-web restart    # ★ Fallback/other: unified safe restart after plugin changes, config edits, or dsh upgrade
 dsh-web start      # Start / auto-takeover (create session if none, migrate into tmux if unmanaged)
-dsh-web stop       # Stop
+dsh-web stop       # Stop (Ctrl-C; tmux hosting stays, `restart` brings it back)
+dsh-web quit       # Quit fully: stop + close the tmux hosting session + clean up (nothing in the background)
 dsh-web status     # Check session/port/PID/logs
 dsh-web attach     # Enter tmux for troubleshooting
 dsh-web autostart-on    # Enable autostart at login (default OFF, user opt-in; launchd/systemd)
@@ -252,6 +253,14 @@ auto-reconciled before the next boot — no manual cleanup needed.
 MIT
 
 ## Changelog
+
+### v2.0.8 (quit — fully stop, nothing stays in the background)
+
+- 🚪 **`dsh-web quit`**: stops dsh web (Ctrl-C, TERM fallback), **closes the tmux
+  hosting session** and cleans up (`crash-count`) — nothing stays in the
+  background. `stop` only sends Ctrl-C and keeps the hosting session (so `restart`
+  is fast); `quit` is the "I'm done" exit. If the watchdog is active it prints a
+  reminder (it never auto-starts a stopped web).
 
 ### v2.0.7 (coexists with dsh-market on pnpm-workspace.yaml)
 
