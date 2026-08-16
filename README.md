@@ -6,11 +6,23 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.5-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.7-4d6bfe)
 
 **English** | [简体中文](README.zh-CN.md)
 
 ## Changelog
+
+### v2.0.7 (coexists with dsh-market on pnpm-workspace.yaml)
+
+- 🔀 `ensureWorkspaceAllowed` now **merges** into dsh-market's `allowBuilds`
+  object style (name → boolean, incl. its "set this to true or false" template)
+  instead of overwriting it with our legacy list format. Both tools can now
+  write the same file without clobbering each other.
+
+### v2.0.6 (install.sh auto PATH)
+
+- 🔧 `install.sh` installs the `dsh-web` command and **auto-adds its bin dir to
+  your shell PATH** (previously the command was installed but not found).
 
 ### v2.0.5 (launchd watchdog — fully automatic takeover)
 

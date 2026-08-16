@@ -329,8 +329,12 @@ function buildsNotAllowedSpec(tail) {
 }
 
 /** Read the profile's pnpm-workspace.yaml and ensure a key is allowed. */
-function ensureWorkspaceAllowed(profileDir, key, kind) {
-  // kinds: 'allowBuilds' (list) | 'minimumReleaseAgeExclude' (list)
+export function ensureWorkspaceAllowed(profileDir, key, kind) {
+  // kinds: 'allowBuilds' | 'minimumReleaseAgeExclude'.
+  // allowBuilds is written by dsh-market as a name→boolean OBJECT (its own
+  // "set this to true or false" template) and by us as a legacy LIST — merge
+  // into the existing shape instead of overwriting, so the two tools coexist
+  // on the same file. Placeholder/missing keys are set to true on demand.
   const wsPath = join(profileDir, 'pnpm-workspace.yaml')
   let doc = {}
   try {
@@ -338,9 +342,16 @@ function ensureWorkspaceAllowed(profileDir, key, kind) {
     if (parsed && typeof parsed === 'object') doc = parsed
   } catch { /* file missing or unparsable — start fresh */ }
   const field = kind === 'allowBuilds' ? 'allowBuilds' : 'minimumReleaseAgeExclude'
-  const list = Array.isArray(doc[field]) ? doc[field] : []
-  if (list.includes(key)) return false // already allowed
-  doc[field] = [...list, key]
+  const existing = doc[field]
+  if (kind === 'allowBuilds' && existing !== undefined && !Array.isArray(existing) && typeof existing === 'object') {
+    // dsh-market 对象风格：name -> boolean。合并不覆盖；已允许则跳过。
+    if (existing[key] === true) return false // already allowed
+    doc[field] = { ...existing, [key]: true }
+  } else {
+    const list = Array.isArray(existing) ? existing : []
+    if (list.includes(key)) return false // already allowed
+    doc[field] = [...list, key]
+  }
   const body = yaml.dump(doc, { lineWidth: -1 })
   writeFileAtomic(wsPath, body)
   return true

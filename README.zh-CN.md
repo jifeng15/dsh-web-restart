@@ -6,11 +6,22 @@
 [![dsh-skill](https://img.shields.io/badge/dsh--skill-yes-8e44ad?logo=deepseek)](https://github.com/topics/dsh-skill)
 [![deepseek-harness](https://img.shields.io/badge/deepseek--harness-yes-4d6bfe)](https://github.com/topics/deepseek-harness)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-2.0.5-4d6bfe)
+![Version](https://img.shields.io/badge/version-2.0.7-4d6bfe)
 
 **简体中文** | [English](README.md)
 
 ## 更新记录
+
+### v2.0.7（与 dsh-market 共存兼容）
+
+- 🔀 `ensureWorkspaceAllowed` 现在**合并**进 dsh-market 写的 `allowBuilds`
+  **对象风格**（name→boolean，含它的 "set this to true or false" 模板），不再用
+  我们的旧列表格式覆盖它。两个工具写同一个文件不再互相清掉。
+
+### v2.0.6（install.sh 自动补 PATH）
+
+- 🔧 `install.sh` 安装 `dsh-web` 命令并**自动把 bin 目录加进 shell PATH**
+  （此前命令装了却找不到）。
 
 ### v2.0.5（launchd 看门狗 · 真·自动接管）
 
