@@ -284,6 +284,15 @@ MIT
 
 ## 更新记录
 
+### v2.0.11（~/bin 调用导致的裸托管误杀修复）
+
+- 🩹 **修复**：从 `~/bin/dsh-web` 启动时托管曾退化为「无 run-loop 裸进程」
+  （install.sh 早期没装 run-loop.sh），看门狗误判裸托管并误杀 → 第一次 `start`
+  端口起来后整个 tmux server 消失（"全灭"），第二次因 5 分钟冷却侥幸存活。
+  - `crash_loop_cmd` 现在会回退到 skill 副本 `scripts/` 找 run-loop.sh；
+  - `install.sh` 同时安装 `run-loop.sh` 到 bin 目录；
+  - `auto_rehost` 增加"托管会话已不存在则跳过"保险。
+
 ### v2.0.10（裸进程托管自动修复）
 
 - 💊 看门狗新增自愈：检测**裸进程托管**（在托管会话里但 run-loop 丢失，崩溃自动

@@ -286,6 +286,18 @@ MIT
 
 ## Changelog
 
+### v2.0.11 (fix: bare-hosting mis-kill when launched from ~/bin/dsh-web)
+
+- 🩹 **Fix**: starting via `~/bin/dsh-web` used to degrade hosting to a
+  "run-loop-less bare process" (early install.sh didn't ship run-loop.sh), so
+  the watchdog misjudged it as bare hosting and killed it — the first `start`
+  came up then the whole tmux server vanished; the second survived only because
+  of the 5-min cooldown.
+  - `crash_loop_cmd` now falls back to the skill copy's `scripts/` for
+    run-loop.sh;
+  - `install.sh` ships `run-loop.sh` to the bin dir too;
+  - `auto_rehost` skips when the hosting session no longer exists (safety).
+
 ### v2.0.10 (bare-hosting auto-repair)
 
 - 💊 The watchdog now detects **bare hosting** (web in the hosted session but

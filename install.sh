@@ -61,7 +61,11 @@ install_bin() {
   mkdir -p "${BIN_DIR}"
   cp "${SRC_DIR}/scripts/dsh-web.sh" "${BIN_DIR}/dsh-web"
   chmod +x "${BIN_DIR}/dsh-web"
-  echo "==> 命令行工具已安装到 ${BIN_DIR}/dsh-web"
+  # run-loop.sh 一并安装：从 ~/bin/dsh-web 调用时若同目录没有 run-loop.sh，
+  # 托管会退化为「无 run-loop 裸进程」，被看门狗误判误杀（见坑 #13）。
+  cp "${SRC_DIR}/scripts/run-loop.sh" "${BIN_DIR}/run-loop.sh"
+  chmod +x "${BIN_DIR}/run-loop.sh"
+  echo "==> 命令行工具已安装到 ${BIN_DIR}/dsh-web（含 run-loop.sh）"
   # 若 BIN_DIR 不在 PATH：自动写入 shell rc（带标记防重复），避免「命令不存在」
   if ! printf '%s' ":$PATH:" | grep -q ":${BIN_DIR}:"; then
     local marker_found=0 rc

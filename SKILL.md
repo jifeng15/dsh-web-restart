@@ -9,7 +9,7 @@ description: >
   removing plugins, after editing profile config (cordis.patch.yml), after upgrading
   the dsh package, when dsh web needs to run persistently without a terminal, or when
   dsh web is down and needs to be brought back up inside tmux.
-version: 1.1.8
+version: 1.1.9
 license: MIT
 metadata:
   dsh:
@@ -274,3 +274,10 @@ bash <skill_dir>/scripts/dsh-web.sh watchdog-off    # 关闭
     修复**（30s 内停裸进程 → 同会话 run-loop 拉起，带 5 分钟冷却）；想立即修用
     `dsh-web heal`。修复 = 一次安全重启，agent 会话会断一次（tmux server 独立
     执行，调用方被杀也能完成）。
+13. **从 `~/bin/dsh-web` 启动导致「无 run-loop 托管」→ 看门狗误杀「全灭」**：
+    install.sh 早期只装 dsh-web、没装 run-loop.sh，从 ~/bin 调用时 crash_loop_cmd
+    找不到 run-loop → 托管退化为裸进程 → 看门狗误判并误杀 → pane 退出、会话关闭、
+    tmux server 消失（第一次 start「全灭」，第二次因冷却侥幸存活）。✅ 已修：
+    crash_loop_cmd 回退到 skill 副本 scripts/ 找 run-loop.sh；install.sh 同时装
+    run-loop.sh；auto_rehost 增加「会话已不存在则跳过」保险。已装用户重跑
+    `install.sh --bin-only` 或手动把 scripts/run-loop.sh 拷到 ~/bin。

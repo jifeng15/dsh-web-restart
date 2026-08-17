@@ -184,8 +184,20 @@ resolve_session() {
 
 # 崩溃自动重启的包装命令（若开启且 run-loop.sh 存在）
 crash_loop_cmd() {
-  local loop_dir
+  # 定位 run-loop.sh：本脚本目录 > DSH_SCRIPTS_DIR > skill 副本 scripts/。
+  # 从 ~/bin/dsh-web（install.sh 拷贝的命令）调用时本目录没有 run-loop.sh，
+  # 若直接退回裸 `dsh web` 会变成「无 run-loop 托管」，被看门狗误判为裸进程
+  # 并误杀（见坑 #13）。因此必须回退到 skill 副本找到 run-loop.sh。
+  local loop_dir candidates d
   loop_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  candidates="${DSH_SCRIPTS_DIR:-} ${loop_dir} $HOME/.agents/skills/dsh-web-restart/scripts"
+  for d in ${candidates}; do
+    [ -z "${d}" ] && continue
+    if [ -f "${d}/run-loop.sh" ]; then
+      loop_dir="${d}"
+      break
+    fi
+  done
   if [ "${DSH_CRASH_RESTART:-1}" = "1" ] && [ -f "${loop_dir}/run-loop.sh" ]; then
     printf '%s' "${loop_dir}/run-loop.sh -- ${DSH_CMD}"
   else
@@ -983,6 +995,12 @@ auto_rehost() {
   last="$(cat "${LOG_DIR}/last-rehost" 2>/dev/null || echo 0)"
   if [ $(( now - last )) -lt 300 ]; then
     log "watchdog：裸进程托管（PID ${bare_pid}）——5 分钟内已修复过，跳过本轮"
+    return 0
+  fi
+  # 保险：托管会话必须还在，否则杀掉裸进程后没地方拉起（pane 退出会连会话一起
+  # 关掉、tmux server 消失——第一次 start「全灭」就是这么来的，见坑 #13）。
+  if ! has_session; then
+    log "watchdog：托管会话 ${SESSION} 已不存在，跳过裸进程修复（避免杀完没地方拉起）"
     return 0
   fi
   log "watchdog：检测到裸进程托管（PID ${bare_pid}，run-loop 丢失），自动修复为 run-loop 托管..."
